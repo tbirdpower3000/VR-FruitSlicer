@@ -40,9 +40,8 @@ landscape: no browser bars, the screen stays awake, and camera and motion are
 allowed for this site without prompts. It is not in the App Store; it is built
 unsigned and you install it on your own phone by sideloading.
 
-1. On GitHub open **Actions → Build the Fruit VR iPhone app**, pick the latest
-   run with a green tick, and download the **FruitVR-unsigned-ipa** artifact (you
-   must be signed in). Unzip it once to get `FruitVR.ipa`.
+1. Download **FruitVR.ipa** from the
+   [ios-latest release](https://github.com/tbirdpower3000/VR-FruitSlicer/releases/tag/ios-latest).
 2. Install `FruitVR.ipa` with a sideloading tool such as AltStore, SideStore or
    Sideloadly, which signs it with your own Apple ID.
 3. On the phone, turn on **Settings → Privacy & Security → Developer Mode** if

@@ -7,7 +7,7 @@ on:
       - ".github/workflows/ios.yml"
   workflow_dispatch: {}
 permissions:
-  contents: read
+  contents: write
 jobs:
   build:
     runs-on: macos-15
@@ -35,3 +35,11 @@ jobs:
           name: FruitVR-unsigned-ipa
           path: ios/FruitVR.ipa
           if-no-files-found: error
+      - name: Publish as the "ios-latest" release (a direct download link for the .ipa)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete ios-latest --cleanup-tag --yes || true
+          gh release create ios-latest ios/FruitVR.ipa --target "$GITHUB_SHA" --prerelease \
+            --title "Fruit VR for iPhone (latest build)" \
+            --notes "Unsigned FruitVR.ipa built from $GITHUB_REF_NAME. Sideload it with AltStore, SideStore or Sideloadly; see the README."
