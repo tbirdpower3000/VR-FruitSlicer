@@ -13,7 +13,7 @@ desktop webcam game.
 
 ## Play
 
-Open the GitHub Pages address on the phone (or scan the QR code on the page from
+Open <https://tbirdpower3000.github.io/VR-FruitSlicer/> on the phone (or scan the QR code on the page from
 a computer), press **Start**, allow motion and the camera, turn the phone
 sideways and put it in the viewer.
 
