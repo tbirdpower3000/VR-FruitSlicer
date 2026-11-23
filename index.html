@@ -430,15 +430,18 @@
   const sphereGeo = new THREE.SphereGeometry(1, 20, 14), halfGeo = new THREE.SphereGeometry(1, 20, 8, 0, Math.PI * 2, 0, Math.PI / 2), capGeo = new THREE.CircleGeometry(1, 20);
   capGeo.rotateX(Math.PI / 2);
   const mats = FRUIT.map((f) => ({ skin: new THREE.MeshLambertMaterial({ color: f.skin }), flesh: new THREE.MeshLambertMaterial({ color: f.flesh, side: THREE.DoubleSide }) }));
-  const G = 3.2;
+  const G = 3.2, FAR = 6; // gravity (gentler than real, so there is time to swing), and how far away fruit is thrown from, in metres
   function spawn(now) {
     const k = Math.floor(Math.random() * FRUIT.length), f = FRUIT[k];
-    const az = (Math.random() * 2 - 1) * 38 * D, dist = 2.3 + Math.random() * 1.0, apex = 1.5 + Math.random() * 1.3;
+    // Fruit is thrown from well out in the room and arcs in towards you: it starts 6 to 7.5 m away and comes down about
+    // 2 to 3 m away, so it grows as it comes and is easiest to cut near the top of its arc.
+    const az = (Math.random() * 2 - 1) * 38 * D, dist = FAR + Math.random() * 1.5, near = 2.0 + Math.random() * 0.8, apex = 1.7 + Math.random() * 1.5;
+    const vy = Math.sqrt(2 * G * apex), flight = (2 * vy) / G, vin = (dist - near) / flight, side = (Math.random() - 0.5) * 0.5;
     const m = new THREE.Mesh(sphereGeo, mats[k].skin);
-    m.scale.setScalar(f.r);
+    m.scale.setScalar(f.r * 0.01);
     m.position.set(Math.sin(az) * dist, -1.8, -Math.cos(az) * dist);
     scene.add(m);
-    S.fruits.push({ m, k, r: f.r, v: new THREE.Vector3((Math.random() - 0.5) * 0.5, Math.sqrt(2 * G * apex), 0), spin: new THREE.Vector3(Math.random() * 3, Math.random() * 3, Math.random() * 3), minAng: 99, dx: 0, dy: 0, swept: false });
+    S.fruits.push({ m, k, r: f.r, v: new THREE.Vector3(-Math.sin(az) * vin + Math.cos(az) * side, vy, Math.cos(az) * vin + Math.sin(az) * side), age: 0, spin: new THREE.Vector3(Math.random() * 3, Math.random() * 3, Math.random() * 3), minAng: 99, dx: 0, dy: 0, swept: false });
     S.m.thrown++;
     sfx('launch', panOf(m.position));
   }
@@ -520,6 +523,7 @@
       fr.v.y -= G * dt;
       fr.m.position.addScaledVector(fr.v, dt);
       fr.m.rotation.x += fr.spin.x * dt; fr.m.rotation.y += fr.spin.y * dt;
+      if (fr.age < 0.2) { fr.age += dt; fr.m.scale.setScalar(fr.r * Math.min(1, fr.age / 0.2)); } // grows in over a fifth of a second rather than popping into view
       const d = fr.m.position.length(), angR = Math.atan(fr.r / d) / D + 1.5;
       let hit = false;
       if (blade.ok) {
