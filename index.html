@@ -149,7 +149,7 @@
   let clearArmed = 0;
   $('clear').onclick = () => {
     if (Date.now() - clearArmed > 4000) { clearArmed = Date.now(); $('clear').textContent = 'Press again to clear'; return; }
-    store.set('fruitVRRounds', []); store.set('fruitVRBias', { x: 0, y: 0, n: 0 });
+    store.set('fruitVRRounds', []); store.set('fruitVRBias', { x: 0, y: 0, n: 0 }); store.set('fruitVRPlainCam', false);
     $('clear').textContent = 'Clear'; clearArmed = 0; drawRounds();
   };
 
@@ -368,8 +368,8 @@
   }
   async function startCamera() {
     let st = await openCam({ facingMode: { ideal: 'environment' } });
-    let track = st.getVideoTracks()[0];
-    try {
+    let track = st.getVideoTracks()[0], switched = false;
+    if (!store.get('fruitVRPlainCam', false)) try {
       const front = /front|selfie|facetime|user/i, cur = track.getSettings ? track.getSettings().deviceId : null;
       const cams = (await navigator.mediaDevices.enumerateDevices()).filter((d) => d.kind === 'videoinput' && d.deviceId && !front.test(d.label));
       const rank = (d) => (/ultra/i.test(d.label) ? 0 : /triple/i.test(d.label) ? 1 : /dual.*wide|wide.*dual/i.test(d.label) ? 2 : 9);
@@ -380,7 +380,7 @@
         let got = null;
         try { got = await openCam({ deviceId: { exact: d.deviceId } }); } catch (e) {}
         const facing = got && got.getVideoTracks()[0].getSettings ? got.getVideoTracks()[0].getSettings().facingMode : null;
-        if (got && facing !== 'user') { st = got; track = st.getVideoTracks()[0]; break; }
+        if (got && facing !== 'user') { st = got; track = st.getVideoTracks()[0]; switched = true; break; }
         if (got) stopCam(got);
         st = await openCam({ facingMode: { ideal: 'environment' } });
         track = st.getVideoTracks()[0];
@@ -388,9 +388,21 @@
     } catch (e) {}
     if (track.readyState === 'ended') { st = await openCam({ facingMode: { ideal: 'environment' } }); track = st.getVideoTracks()[0]; }
     await zoomOut(track);
+    // The video is started without waiting on it: a camera that opens but never gives a picture would otherwise hold
+    // the game at the setup page for good. A wider camera that gives no picture within two and a half seconds is given
+    // up: the ordinary camera is opened in its place, and this phone is remembered as one to leave on the ordinary camera.
+    const pictures = async (ms) => { const t0 = performance.now(); while (performance.now() - t0 < ms) { if (vid.readyState >= 2 && vid.videoWidth > 0) return true; await new Promise((r) => setTimeout(r, 100)); } return false; };
+    const show = () => { vid.srcObject = st; const pl = vid.play(); if (pl && pl.catch) pl.catch(() => {}); };
+    show();
+    if (switched && !(await pictures(2500))) {
+      store.set('fruitVRPlainCam', true);
+      stopCam(st);
+      st = await openCam({ facingMode: { ideal: 'environment' } });
+      track = st.getVideoTracks()[0];
+      show();
+    }
+    if (!(await pictures(3000))) { stopCam(st); throw new Error('The camera gave no picture'); }
     S.cam = track.label || '';
-    vid.srcObject = st;
-    await vid.play();
     return st;
   }
   async function loadHands() {
