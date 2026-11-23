@@ -33,6 +33,30 @@ view and head tracking (no lens-distortion correction). It also works with the
 phone's rotation lock on. On a desktop it shows a single view you can drag to
 look around.
 
+## iPhone app (unofficial, sideloaded)
+
+`ios/` holds a small iPhone app, **Fruit VR**, that runs this page edge to edge in
+landscape: no browser bars, the screen stays awake, and camera and motion are
+allowed for this site without prompts. It is not in the App Store; it is built
+unsigned and you install it on your own phone by sideloading.
+
+1. On GitHub open **Actions → Build the Fruit VR iPhone app**, pick the latest
+   run with a green tick, and download the **FruitVR-unsigned-ipa** artifact (you
+   must be signed in). Unzip it once to get `FruitVR.ipa`.
+2. Install `FruitVR.ipa` with a sideloading tool such as AltStore, SideStore or
+   Sideloadly, which signs it with your own Apple ID.
+3. On the phone, turn on **Settings → Privacy & Security → Developer Mode** if
+   asked, and trust your Apple ID under **Settings → General → VPN & Device
+   Management**.
+
+With a free Apple ID the app stops opening after 7 days until it is refreshed
+with the same tool. The app loads the game from this site, so it needs a
+connection and always runs the current page. A two-finger double tap reloads.
+
+It is built by `.github/workflows/ios.yml` on a macOS runner: XcodeGen makes the
+project from `ios/project.yml` and `xcodebuild` builds `ios/Sources/App.swift`.
+The app compiles and packages; it has not yet been confirmed on a phone.
+
 ## Aim correction
 
 Each round is saved in the browser (`fruitVRRounds`): fruit sliced, swipes that
