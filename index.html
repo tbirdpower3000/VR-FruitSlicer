@@ -44,10 +44,9 @@
 
   <div class="card">
     <h2 style="margin-top:0">Blade</h2>
-    <label class="opt"><input type="radio" name="blade" value="hand" checked /><span><b>My hand</b> (rear camera)<br /><span class="muted">Hold a hand out in front of the viewer and swipe through the fruit with your index finger. The viewer must leave the phone's rear camera uncovered.</span></span></label>
+    <label class="opt"><input type="radio" name="blade" value="hand" checked /><span><b>My hand</b> (rear camera)<br /><span class="muted">Hold a hand out in front of the viewer and swipe through the fruit with your index finger. The viewer must leave the phone's rear camera uncovered. The widest rear camera (0.5×) is used where the phone has one.</span></span></label>
     <label class="opt"><input type="radio" name="blade" value="head" /><span><b>My gaze</b><br /><span class="muted">The blade sits where you look; sweep your head across the fruit. No camera needed.</span></span></label>
     <label class="opt"><input type="checkbox" id="room" checked /><span><b>See my room</b><br /><span class="muted">Shows the rear camera behind the fruit instead of the virtual room.</span></span></label>
-    <label class="opt"><input type="checkbox" id="wide" checked /><span><b>Widest camera (0.5×)</b><br /><span class="muted">Uses the phone's ultra-wide rear camera when it has one, so more of the room and your hands are in view. Turn this off if your hand is lost too often: it looks smaller to the tracker through the wide lens.</span></span></label>
     <label class="opt"><input type="checkbox" id="sound" checked /><span><b>Sound</b><br /><span class="muted">Blade, splat and streak sounds. On an iPhone the side switch must not be on silent.</span></span></label>
     <label class="opt" id="lidarOpt" hidden><input type="checkbox" id="lidar" /><span><b>LiDAR distance</b><br /><span class="muted">Shows how far away things are, measured by the phone's LiDAR sensor: whatever is straight ahead, and your hand when it is in view. While this is on, the sensor has the rear camera to itself, so the blade follows your gaze and the virtual room is shown.</span></span></label>
     <button class="primary" id="go">Start</button>
@@ -354,32 +353,41 @@
     return o;
   }
   const hn = [0, 0];
-  // One rear camera is opened. With "Widest camera" on, the ultra-wide (0.5x) one is preferred: the phone lists its rear
-  // cameras by name once the camera is allowed, and where there is no separate ultra-wide the lens is zoomed out as far
-  // as it goes instead.
-  async function startCamera(wide) {
-    const size = { width: { ideal: 1280 }, height: { ideal: 720 } };
-    let st = await navigator.mediaDevices.getUserMedia({ audio: false, video: Object.assign({ facingMode: { ideal: 'environment' } }, size) });
+  // One rear camera is opened, and always the one with the widest view. The phone lists its rear cameras by name once the
+  // camera is allowed. A separate ultra-wide (0.5x) camera is taken first; failing that, a combined camera ("Triple",
+  // "Dual Wide") that can zoom out to the ultra-wide lens; failing that, the ordinary one. Whichever opens is then zoomed
+  // out as far as it goes, and a candidate is kept only if it really is a rear camera.
+  const camSize = { width: { ideal: 1280 }, height: { ideal: 720 } };
+  const openCam = (how) => navigator.mediaDevices.getUserMedia({ audio: false, video: Object.assign({}, how, camSize) });
+  const stopCam = (st) => st.getTracks().forEach((t) => t.stop());
+  async function zoomOut(track) {
+    try {
+      const z = track.getCapabilities && track.getCapabilities().zoom;
+      if (z && z.min != null && track.getSettings().zoom > z.min) await track.applyConstraints({ advanced: [{ zoom: z.min }] });
+    } catch (e) {}
+  }
+  async function startCamera() {
+    let st = await openCam({ facingMode: { ideal: 'environment' } });
     let track = st.getVideoTracks()[0];
-    if (wide) {
-      try {
-        const cams = (await navigator.mediaDevices.enumerateDevices()).filter((d) => d.kind === 'videoinput');
-        const uw = cams.find((d) => /ultra/i.test(d.label) && !/front|selfie/i.test(d.label));
-        const cur = track.getSettings ? track.getSettings().deviceId : null;
-        if (uw && uw.deviceId && uw.deviceId !== cur) {
-          st.getTracks().forEach((t) => t.stop());
-          try {
-            st = await navigator.mediaDevices.getUserMedia({ audio: false, video: Object.assign({ deviceId: { exact: uw.deviceId } }, size) });
-          } catch (e) {
-            st = await navigator.mediaDevices.getUserMedia({ audio: false, video: Object.assign({ facingMode: { ideal: 'environment' } }, size) });
-          }
-          track = st.getVideoTracks()[0];
-        } else if (!uw && track.getCapabilities) {
-          const z = track.getCapabilities().zoom;
-          if (z && z.min != null && track.getSettings().zoom > z.min) await track.applyConstraints({ advanced: [{ zoom: z.min }] });
-        }
-      } catch (e) {}
-    }
+    try {
+      const front = /front|selfie|facetime|user/i, cur = track.getSettings ? track.getSettings().deviceId : null;
+      const cams = (await navigator.mediaDevices.enumerateDevices()).filter((d) => d.kind === 'videoinput' && d.deviceId && !front.test(d.label));
+      const rank = (d) => (/ultra/i.test(d.label) ? 0 : /triple/i.test(d.label) ? 1 : /dual.*wide|wide.*dual/i.test(d.label) ? 2 : 9);
+      const wider = cams.filter((d) => rank(d) < 9 && rank(d) < rank({ label: track.label || '' })).sort((x, y) => rank(x) - rank(y));
+      for (const d of wider) {
+        if (d.deviceId === cur) break;
+        stopCam(st);
+        let got = null;
+        try { got = await openCam({ deviceId: { exact: d.deviceId } }); } catch (e) {}
+        const facing = got && got.getVideoTracks()[0].getSettings ? got.getVideoTracks()[0].getSettings().facingMode : null;
+        if (got && facing !== 'user') { st = got; track = st.getVideoTracks()[0]; break; }
+        if (got) stopCam(got);
+        st = await openCam({ facingMode: { ideal: 'environment' } });
+        track = st.getVideoTracks()[0];
+      }
+    } catch (e) {}
+    if (track.readyState === 'ended') { st = await openCam({ facingMode: { ideal: 'environment' } }); track = st.getVideoTracks()[0]; }
+    await zoomOut(track);
     S.cam = track.label || '';
     vid.srcObject = st;
     await vid.play();
@@ -773,7 +781,7 @@
     S.mode = want;
     const needCam = want === 'hand' || S.showRoom;
     if (needCam && !S.stream) {
-      try { S.stream = await startCamera($('wide').checked); } catch (e) {
+      try { S.stream = await startCamera(); } catch (e) {
         S.stream = null; S.showRoom = false;
         if (want === 'hand') { S.mode = 'head'; say('The camera could not be used, so the blade follows your gaze.'); }
       }

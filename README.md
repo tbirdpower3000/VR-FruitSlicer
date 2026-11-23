@@ -24,8 +24,8 @@ button (a tap on the screen).
   camera or the hand tracker isn't available.
 - **See my room** shows the rear camera behind the fruit instead of the virtual
   room.
-- **Widest camera (0.5×)** uses the ultra-wide rear camera where the phone has
-  one.
+- The page always opens the rear camera with the widest view: the ultra-wide (0.5×)
+  one where the phone has it, zoomed out as far as it goes.
 - When a round ends, look at the board for two seconds or press the viewer's
   button to play again. Turn the phone upright to go back to the setup page.
 
