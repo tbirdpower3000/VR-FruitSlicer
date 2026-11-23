@@ -722,7 +722,9 @@
       const tick = Math.ceil(left);
       if (tick !== S.tick) { S.tick = tick; sfx(tick > 0 ? 'count' : 'go'); }
       drawText(hud, ['🍉 0']);
-      if (left <= -0.4) { note.visible = false; S.phase = 'play'; S.t0 = now; S.next = now + 300; }
+      // the fruit is thrown straight ahead of where you are looking now, as the round begins: the button may have been
+      // pressed before the phone went into the viewer, facing anywhere
+      if (left <= -0.4) { note.visible = false; S.phase = 'play'; S.t0 = now; S.next = now + 300; recentre = true; }
     } else if (S.phase === 'play') play(now, dt);
     else if (S.phase === 'end') {
       fwd.set(0, 0, -1).applyQuaternion(camera.quaternion);
