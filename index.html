@@ -55,7 +55,7 @@
   </div>
 
   <h2>How to play</h2>
-  <p class="muted">1. Press Start and allow motion (and the camera, if asked). 2. Turn the phone sideways and put it in the viewer. 3. A round lasts 60 seconds. When it ends, look at the panel for two seconds, or press the viewer's button, to play again. Turn the phone upright to come back here.</p>
+  <p class="muted">1. Press Start and allow motion (and the camera, if asked). 2. Turn the phone sideways and put it in the viewer. 3. Press the viewer's button (a tap on the screen) to start. A round lasts 60 seconds. When it ends, look at the panel for two seconds, or press the viewer's button, to play again. Turn the phone upright to come back here.</p>
 
   <h2>Open on your phone</h2>
   <p class="muted">Scan this with the phone's camera, or with the scanner in the browser you want to play in. It opens this page.</p>
@@ -339,7 +339,7 @@
     pd[0] = e.clientX; pd[1] = e.clientY;
   });
   renderer.domElement.addEventListener('pointerup', () => {
-    if (pd && !pd[2] && S.phase === 'end') startRound(); // the viewer's button is a tap on the screen
+    if (pd && !pd[2] && (S.phase === 'end' || S.phase === 'wait')) startRound(); // the viewer's button is a tap on the screen
     pd = null;
   });
 
@@ -687,6 +687,10 @@
       // waiting for the phone to be turned sideways: the countdown and the round clock stand still
       if (S.phase === 'count') S.count = now;
       else if (S.phase === 'play') { S.t0 += gap; S.next += gap; }
+    } else if (S.phase === 'wait') {
+      // nothing starts until the viewer's button is pressed, so there is time to put the phone in the viewer
+      note.visible = true;
+      drawText(note, ['Ready?', TOUCH ? 'Press the viewer\'s button to start' : 'Click to start']);
     } else if (S.phase === 'count') {
       const left = 3 - (now - S.count) / 1000;
       note.visible = true;
@@ -780,7 +784,8 @@
     S.on = true;
     resize();
     try { if (navigator.wakeLock) wake = await navigator.wakeLock.request('screen'); } catch (e) {}
-    startRound();
+    S.phase = 'wait';
+    hud.visible = false; panel.visible = false; recentre = true;
     last = performance.now();
     requestAnimationFrame(frame);
   }
