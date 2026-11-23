@@ -1,0 +1,46 @@
+name: Build iPhone app
+
+on:
+  push:
+    branches: [main, ios-browser]
+    paths: ["ios/**", ".github/workflows/ios.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  ipa:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Make the Xcode project
+        working-directory: ios
+        run: |
+          brew install xcodegen
+          xcodegen generate
+      - name: Build (unsigned)
+        working-directory: ios
+        run: |
+          xcodebuild -project VRBrowser.xcodeproj -target VRBrowser -configuration Release -sdk iphoneos \
+            SYMROOT="$PWD/build" CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" build
+      - name: Package the .ipa
+        working-directory: ios
+        run: |
+          mkdir Payload
+          cp -R build/Release-iphoneos/VRBrowser.app Payload/
+          zip -qry VRBrowser.ipa Payload
+          ls -lh VRBrowser.ipa
+      - uses: actions/upload-artifact@v4
+        with:
+          name: VRBrowser-ipa
+          path: ios/VRBrowser.ipa
+      - name: Publish as the "ios-latest" release
+        if: github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete ios-latest --cleanup-tag --yes || true
+          gh release create ios-latest ios/VRBrowser.ipa --target "$GITHUB_SHA" --prerelease \
+            --title "VR Browser for iPhone (latest build)" \
+            --notes "Unsigned .ipa built from main. Sideload it with AltStore or Sideloadly; see ios/README.md."

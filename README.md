@@ -33,6 +33,12 @@ view and head tracking (no lens-distortion correction). It also works with the
 phone's rotation lock on. On a desktop it shows a single view you can drag to
 look around.
 
+## iPhone app (sideload)
+
+`ios/` holds **VR Browser**, a small browser app for the iPhone that opens this game
+full-screen when the phone is turned sideways. GitHub builds it as an `.ipa` you can
+sideload with AltStore or Sideloadly; see [ios/README.md](ios/README.md).
+
 ## Aim correction
 
 Each round is saved in the browser (`fruitVRRounds`): fruit sliced, swipes that
