@@ -52,8 +52,17 @@ With a free Apple ID the app stops opening after 7 days until it is refreshed
 with the same tool. The app loads the game from this site, so it needs a
 connection and always runs the current page. A two-finger double tap reloads.
 
+**LiDAR distance (app only).** On an iPhone with a LiDAR sensor (Pro models, 12 Pro
+and later) the setup page inside the app shows a **LiDAR distance** switch. With it on,
+a line above the score shows the distance to whatever is straight ahead (📏) and to your
+hand when the sensor's camera sees it (✋), about ten times a second. The sensor needs the
+rear camera to itself, so with LiDAR on the blade follows your gaze and the virtual room
+is shown. The app reads the sensor through ARKit and finds the hand with Apple's Vision
+hand finder (`ios/Sources/Lidar.swift`), and passes the numbers to the page as
+`fruitvr-lidar` events. Not yet confirmed on a phone.
+
 It is built by `.github/workflows/ios.yml` on a macOS runner: XcodeGen makes the
-project from `ios/project.yml` and `xcodebuild` builds `ios/Sources/App.swift`.
+project from `ios/project.yml` and `xcodebuild` builds the Swift files in `ios/Sources/`.
 The app compiles and packages; it has not yet been confirmed on a phone.
 
 ## Aim correction

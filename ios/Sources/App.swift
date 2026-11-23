@@ -23,10 +23,11 @@ final class AppDelegate: UIResponder, UIApplicationDelegate {
   }
 }
 
-final class GameViewController: UIViewController, WKUIDelegate, WKNavigationDelegate {
+final class GameViewController: UIViewController, WKUIDelegate, WKNavigationDelegate, WKScriptMessageHandler {
   private var web: WKWebView!
   private let message = UILabel()
   private let retry = UIButton(type: .system)
+  private let lidar = Lidar()
 
   override var prefersStatusBarHidden: Bool { true }
   override var prefersHomeIndicatorAutoHidden: Bool { true }
@@ -41,7 +42,11 @@ final class GameViewController: UIViewController, WKUIDelegate, WKNavigationDele
     cfg.allowsInlineMediaPlayback = true
     cfg.mediaTypesRequiringUserActionForPlayback = []
     // lets the page know it is running inside this app
-    cfg.userContentController.addUserScript(WKUserScript(source: "window.FRUITVR_APP = { version: 1 };", injectionTime: .atDocumentStart, forMainFrameOnly: true))
+    // (and whether this phone has a LiDAR sensor)
+    cfg.userContentController.addUserScript(WKUserScript(source: "window.FRUITVR_APP = { version: 2, lidar: \(Lidar.supported) };", injectionTime: .atDocumentStart, forMainFrameOnly: true))
+    // the page switches the LiDAR sensor on and off with webkit.messageHandlers.fruitvr.postMessage({ lidar: true })
+    cfg.userContentController.add(self, name: "fruitvr")
+    lidar.onReading = { [weak self] r in self?.send(r) }
 
     web = WKWebView(frame: view.bounds, configuration: cfg)
     web.autoresizingMask = [.flexibleWidth, .flexibleHeight]
@@ -81,6 +86,30 @@ final class GameViewController: UIViewController, WKUIDelegate, WKNavigationDele
 
     load()
   }
+
+  // the page's messages to the app; only the game's own site may switch the sensor
+  func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
+    guard message.frameInfo.isMainFrame, message.frameInfo.securityOrigin.host == gameHost,
+          let body = message.body as? [String: Any], let on = body["lidar"] as? Bool else { return }
+    if on { lidar.start() } else { lidar.stop() }
+  }
+
+  // a LiDAR reading goes to the page as a "fruitvr-lidar" event: { c: metres straight ahead, hand: { u, v, d } }
+  private func send(_ r: Lidar.Reading) {
+    guard lidar.running else { return }
+    // the camera's picture is the right way up with the phone's charging end to the right; the other way it is turned over
+    let flip = view.window?.windowScene?.interfaceOrientation == .landscapeLeft
+    var hand = "null"
+    if let h = r.hand {
+      let u = flip ? 1 - h.u : h.u, v = flip ? 1 - h.v : h.v
+      hand = String(format: "{u:%.4f,v:%.4f,d:%@}", u, v, h.d.map { String(format: "%.3f", $0) } ?? "null")
+    }
+    let c = r.centre.map { String(format: "%.3f", $0) } ?? "null"
+    web.evaluateJavaScript("window.dispatchEvent(new CustomEvent('fruitvr-lidar',{detail:{c:\(c),hand:\(hand)}}))", completionHandler: nil)
+  }
+
+  // a new page starts with the sensor off
+  func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) { lidar.stop() }
 
   @objc private func load() {
     message.isHidden = true

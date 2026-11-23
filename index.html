@@ -49,6 +49,7 @@
     <label class="opt"><input type="checkbox" id="room" checked /><span><b>See my room</b><br /><span class="muted">Shows the rear camera behind the fruit instead of the virtual room.</span></span></label>
     <label class="opt"><input type="checkbox" id="wide" checked /><span><b>Widest camera (0.5×)</b><br /><span class="muted">Uses the phone's ultra-wide rear camera when it has one, so more of the room and your hands are in view. Turn this off if your hand is lost too often: it looks smaller to the tracker through the wide lens.</span></span></label>
     <label class="opt"><input type="checkbox" id="sound" checked /><span><b>Sound</b><br /><span class="muted">Blade, splat and streak sounds. On an iPhone the side switch must not be on silent.</span></span></label>
+    <label class="opt" id="lidarOpt" hidden><input type="checkbox" id="lidar" /><span><b>LiDAR distance</b><br /><span class="muted">Shows how far away things are, measured by the phone's LiDAR sensor: whatever is straight ahead, and your hand when it is in view. While this is on, the sensor has the rear camera to itself, so the blade follows your gaze and the virtual room is shown.</span></span></label>
     <button class="primary" id="go">Start</button>
     <p class="muted" id="status" role="status"></p>
   </div>
@@ -93,6 +94,21 @@
     set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} },
   };
   const say = (t) => ($('status').textContent = t || '');
+
+  // ---------- LiDAR (only inside the Fruit VR iPhone app, on a phone that has the sensor) ----------
+  // The app switches the sensor on and off when asked, and sends readings about ten times a second as "fruitvr-lidar"
+  // events: metres to whatever is straight ahead, and the index fingertip in the camera picture with metres to the hand.
+  const APP = window.FRUITVR_APP || null;
+  const appPost = (m) => { try { window.webkit.messageHandlers.fruitvr.postMessage(m); return true; } catch (e) { return false; } };
+  const LIDAR_OK = !!(APP && APP.lidar && window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.fruitvr);
+  const lidar = { c: null, hand: null, t: -1e9, n: 0 };
+  if (LIDAR_OK) {
+    $('lidarOpt').hidden = false;
+    $('lidar').checked = !!store.get('fruitVRLidar', false);
+    $('lidar').onchange = () => store.set('fruitVRLidar', $('lidar').checked);
+    addEventListener('fruitvr-lidar', (e) => { const d = e.detail || {}; lidar.c = d.c; lidar.hand = d.hand || null; lidar.t = performance.now(); lidar.n++; });
+  }
+  const metres = (d) => (d == null || !isFinite(d) ? '–' : d < 10 ? d.toFixed(2) + ' m' : Math.round(d) + ' m');
 
   // ---------- setup screen: past rounds ----------
   function drawRounds() {
@@ -223,6 +239,10 @@
   const hud = textPlane(1.15, 0.2, 640, 110); // score and clock, fixed low in the view
   hud.position.set(0, -0.62, -2);
   camera.add(hud);
+  const dist = textPlane(1.15, 0.16, 720, 100); // the LiDAR distances, just above the score
+  dist.position.set(0, -0.42, -2);
+  dist.visible = false;
+  camera.add(dist);
   const note = textPlane(1.5, 0.34, 800, 180); // short prompts, fixed in the view
   note.position.set(0, 0.5, -2.2);
   note.visible = false;
@@ -569,7 +589,7 @@
       acc: m.swipes ? m.cuts / m.swipes : 0, peakV: m.peakV, meanV: m.vN ? m.vSum / m.vN : 0,
       hand: S.mode === 'hand' ? { frames, lost: m.lostFrames, lostPct: frames ? m.lostFrames / frames : 1, fps: frames / dur, detectMs: detN ? detMs / detN : 0, label: handRaw.label } : null,
       aim: { n: m.aimN, dx: ex, dy: ey, rms: m.aimN ? Math.sqrt(m.aimSq / m.aimN) : 0, missNear: m.missN ? m.missSum / m.missN : null },
-      bias: { x: bias.x, y: bias.y }, screen: [innerWidth, innerHeight], cam: S.cam || '', streak: m.best, fps: perf.sum ? (1000 * perf.n) / perf.sum : 0, res: perf.pr,
+      bias: { x: bias.x, y: bias.y }, lidar: S.lidar, screen: [innerWidth, innerHeight], cam: S.cam || '', streak: m.best, fps: perf.sum ? (1000 * perf.n) / perf.sum : 0, res: perf.pr,
     };
     const rows = store.get('fruitVRRounds', []);
     rows.push(row);
@@ -686,6 +706,12 @@
       if (S.dwell >= 2) { note.visible = false; startRound(); }
     }
     moveBits(dt);
+    // LiDAR distances: straight ahead, and the hand when the sensor's camera sees one. A dash when nothing has come lately.
+    dist.visible = !!S.lidar;
+    if (S.lidar) {
+      const fresh = now - lidar.t < 1000;
+      drawText(dist, [`📏 ${metres(fresh ? lidar.c : null)}` + (fresh && lidar.hand ? `     ✋ ${metres(lidar.hand.d)}` : '')]);
+    }
     // blade trail
     reticle.visible = S.mode === 'head';
     tip.visible = trail.visible = blade.ok && (S.mode === 'hand' || S.phase === 'play');
@@ -720,8 +746,11 @@
 
   // ---------- start / stop ----------
   async function start() {
-    const want = document.querySelector('input[name=blade]:checked').value;
+    let want = document.querySelector('input[name=blade]:checked').value;
     S.showRoom = $('room').checked;
+    // LiDAR needs the rear camera to itself, so with it on the page leaves the camera alone
+    S.lidar = LIDAR_OK && $('lidar').checked && appPost({ lidar: true });
+    if (S.lidar) { want = 'head'; S.showRoom = false; }
     snd.on = $('sound').checked;
     say('Starting…');
     try { ac = ac || new (window.AudioContext || window.webkitAudioContext)(); ac.resume(); } catch (e) {}
@@ -757,6 +786,7 @@
   }
   function stop() {
     S.on = false; S.phase = 'idle';
+    if (S.lidar) { appPost({ lidar: false }); S.lidar = false; }
     $('vr').hidden = true; $('turn').hidden = true; $('setup').hidden = false;
     if (S.stream) { S.stream.getTracks().forEach((t) => t.stop()); S.stream = null; vid.srcObject = null; }
     try { if (wake) wake.release(); } catch (e) {}
@@ -773,7 +803,7 @@
   document.addEventListener('visibilitychange', () => { if (document.hidden && S.on) stop(); });
 
   // for checks: read the state, point the head, or place the hand in the camera picture
-  window.__fruitVR = { S, blade, look(yawDeg, pitchDeg) { drag.yaw = yawDeg * D; drag.pitch = pitchDeg * D; }, hand(u, v) { if (u == null) handRaw.ok = false; else { handRaw.ok = true; handRaw.u = u; handRaw.v = v; handRaw.vu = handRaw.vv = 0; } }, perf, snd, handNow(u, v, vu, vv, agoMs) { Object.assign(handRaw, { u, v, vu, vv, t: performance.now() - agoMs }); return handNow(performance.now(), [0, 0]); }, setMode(m) { S.mode = m; }, pic, handDir(u, v) { const d = videoDir(u, v, new THREE.Vector3()); return [d.x, d.y, d.z]; } };
+  window.__fruitVR = { S, blade, lidar, dist, look(yawDeg, pitchDeg) { drag.yaw = yawDeg * D; drag.pitch = pitchDeg * D; }, hand(u, v) { if (u == null) handRaw.ok = false; else { handRaw.ok = true; handRaw.u = u; handRaw.v = v; handRaw.vu = handRaw.vv = 0; } }, perf, snd, handNow(u, v, vu, vv, agoMs) { Object.assign(handRaw, { u, v, vu, vv, t: performance.now() - agoMs }); return handNow(performance.now(), [0, 0]); }, setMode(m) { S.mode = m; }, pic, handDir(u, v) { const d = videoDir(u, v, new THREE.Vector3()); return [d.x, d.y, d.z]; } };
 })();
 </script>
 </body>

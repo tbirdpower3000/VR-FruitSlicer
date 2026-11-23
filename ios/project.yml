@@ -14,8 +14,8 @@ targets:
       path: Info.plist
       properties:
         CFBundleDisplayName: Fruit VR
-        CFBundleShortVersionString: "0.1"
-        CFBundleVersion: "1"
+        CFBundleShortVersionString: "0.2"
+        CFBundleVersion: "2"
         UILaunchScreen: {}
         UIRequiresFullScreen: true
         UIStatusBarHidden: true
@@ -23,7 +23,7 @@ targets:
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationLandscapeRight
           - UIInterfaceOrientationLandscapeLeft
-        NSCameraUsageDescription: The rear camera finds your hand so it can be the blade, and shows your room behind the fruit. The picture stays on this phone.
+        NSCameraUsageDescription: The rear camera finds your hand so it can be the blade, shows your room behind the fruit, and works with the LiDAR sensor to measure distances. The picture stays on this phone.
         NSMotionUsageDescription: Motion sensors let the view follow your head.
     settings:
       base:
