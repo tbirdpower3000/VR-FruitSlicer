@@ -75,6 +75,28 @@ steady aim error of the hand blade and moves the blade half-way back for the nex
 round (`fruitVRBias`, at most 6°). The setup page lists recent rounds and can copy
 them as JSON.
 
+## Fitting the picture to the lenses
+
+With **Fit the picture to the lenses** on (the default), each eye's picture is made for
+a Google Cardboard of 2015 (I/O 2015, "version 2"), using the figures in Google's own
+viewer profile: lenses 63.9 mm apart and 39.3 mm from the screen, their centres 35 mm
+above the edge the phone rests on, and distortion coefficients k1 = 0.33582564,
+k2 = 0.55348791.
+
+- **Centred on each lens.** Each eye's view is drawn about its own lens's axis, not
+  about the middle of its half of the screen.
+- **True size.** Angles on screen match angles in the scene, from the screen's real
+  size (taken as an iPhone's, 460 pixels to the inch).
+- **Lens stretch taken out.** The lenses stretch the picture more towards the edges.
+  Each eye is first drawn flat, off screen, then put on the screen squeezed the
+  opposite way, so through the lens straight lines look straight.
+- **Field of view.** Google designed this lens for a round field 80° across, so the
+  picture is drawn out to 45° from the lens's axis and fades to black from 41°.
+
+**Picture size** (80% to 125%) is for phones whose screens are not an iPhone's size per
+pixel. Both settings are kept in the browser (`vrLens`) and shared by the games on
+this site. Checked in a desktop browser; not yet looked at through a viewer.
+
 ## Test switches (URL options)
 
 - `?stereo=0` / `?stereo=1`: force one view or the split view.

@@ -47,6 +47,8 @@
     <label class="opt"><input type="radio" name="blade" value="hand" checked /><span><b>My hand</b> (rear camera)<br /><span class="muted">Hold a hand out in front of the viewer and swipe through the fruit with your index finger. The viewer must leave the phone's rear camera uncovered. The widest rear camera (0.5×) is used where the phone has one.</span></span></label>
     <label class="opt"><input type="radio" name="blade" value="head" /><span><b>My gaze</b><br /><span class="muted">The blade sits where you look; sweep your head across the fruit. No camera needed.</span></span></label>
     <label class="opt"><input type="checkbox" id="room" checked /><span><b>See my room</b><br /><span class="muted">Shows the rear camera behind the fruit instead of the virtual room.</span></span></label>
+    <label class="opt"><input type="checkbox" id="lensOn" checked /><span><b>Fit the picture to the lenses</b><br /><span class="muted">Shapes and places each eye's picture for a Google Cardboard (2015) viewer: centred behind each lens, at true size, with the lenses' stretching towards the edges taken out. Turn it off for another kind of viewer.</span></span></label>
+    <label class="opt" for="lensSize"><span style="flex:1"><b>Picture size</b> <output id="lensSizeO">100%</output><br /><input type="range" id="lensSize" min="80" max="125" step="1" value="100" style="width:100%" /><br /><span class="muted">Leave at 100% on an iPhone. On another phone, if things look too big or too small, or the two pictures won't come together, try a little either way.</span></span></label>
     <label class="opt"><input type="checkbox" id="sound" checked /><span><b>Sound</b><br /><span class="muted">Blade, splat and streak sounds. On an iPhone the side switch must not be on silent.</span></span></label>
     <label class="opt" id="lidarOpt" hidden><input type="checkbox" id="lidar" /><span><b>LiDAR distance</b><br /><span class="muted">Shows how far away things are, measured by the phone's LiDAR sensor: whatever is straight ahead, and your hand when it is in view. While this is on, the sensor has the rear camera to itself, so the blade follows your gaze and the virtual room is shown.</span></span></label>
     <button class="primary" id="go">Start</button>
@@ -178,6 +180,96 @@
   const stereo = new THREE.StereoCamera();
   stereo.aspect = 0.5;
   stereo.eyeSep = 0.064;
+
+  // ---------- fitting the picture to the viewer's lenses ----------
+  // The viewer is the Google Cardboard of 2015 (I/O 2015, "version 2"), with the figures from Google's own viewer profile:
+  // lenses 63.9 mm apart, 39.3 mm from the screen, their centres 35 mm above the edge the phone rests on, and a
+  // pincushion stretch of 1 + k1 r^2 + k2 r^4 (r measured from the lens's centre, in screen-to-lens distances).
+  // Each eye's picture is drawn flat into an off-screen picture, with its middle on the lens's own axis and at the size
+  // that makes angles true, and then put on the screen through the opposite of the lens's stretch, so the lens undoes
+  // it. Google's design figures for this lens are a round field 80 degrees across, the eye 18 mm behind it, and the
+  // screen seen as if 0.67 m away. So the picture is drawn out to 45 degrees from the lens's axis and fades to black
+  // from 41, just past the designed field; drawing no wider keeps it sharp and quick.
+  const VIEWER = { lensSep: 63.9, toScreen: 39.3, baseline: 35, k1: 0.33582564, k2: 0.55348791, maxDeg: 45 };
+  const PT_PER_MM = 460 / 3 / 25.4; // an iPhone's screen: 460 pixels to the inch, three pixels to the point
+  const BEZEL_MM = 2.8;             // from the phone's edge to where its screen begins
+  const lens = Object.assign({ on: true, size: 100 }, store.get('vrLens', {}), { rt: null, key: '', eyeL: new THREE.PerspectiveCamera(), eyeR: new THREE.PerspectiveCamera() });
+  $('lensOn').checked = !!lens.on; $('lensSize').value = lens.size; $('lensSizeO').textContent = lens.size + '%';
+  const lensSave = () => { lens.on = $('lensOn').checked; lens.size = +$('lensSize').value; $('lensSizeO').textContent = lens.size + '%'; lens.key = ''; store.set('vrLens', { on: lens.on, size: lens.size }); };
+  $('lensOn').onchange = lensSave; $('lensSize').oninput = lensSave;
+  const lensStretch = (r) => r * (1 + VIEWER.k1 * r * r + VIEWER.k2 * r * r * r * r);
+  const lensMat = new THREE.ShaderMaterial({
+    depthTest: false, depthWrite: false,
+    uniforms: { map: { value: null }, size: { value: new THREE.Vector2() }, cL: { value: new THREE.Vector2() }, cR: { value: new THREE.Vector2() }, fL: { value: new THREE.Vector4() }, fR: { value: new THREE.Vector4() }, k: { value: new THREE.Vector2(VIEWER.k1, VIEWER.k2) }, rmax: { value: 1 } },
+    vertexShader: 'varying vec2 vUv; void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }',
+    fragmentShader: [
+      'precision highp float;',
+      'uniform sampler2D map; uniform vec2 size, cL, cR, k; uniform vec4 fL, fR; uniform float rmax; varying vec2 vUv;',
+      'void main() {',
+      '  bool right = vUv.x > 0.5;',
+      '  vec2 c = right ? cR : cL; vec4 f = right ? fR : fL;',
+      '  vec2 p = (vUv - c) * size;',                       // this spot on the screen, from the lens centre, in screen-to-lens distances
+      '  float r2 = dot(p, p);',
+      '  vec2 v = p * (1.0 + k.x * r2 + k.y * r2 * r2);',   // where the lens makes that spot appear: the direction to show there
+      '  vec2 t = vec2((v.x + f.x) / (f.x + f.y), (v.y + f.z) / (f.z + f.w));',
+      '  float shade = 1.0 - smoothstep(rmax * 0.87, rmax, length(v));',
+      '  if (t.x < 0.0 || t.x > 1.0 || t.y < 0.0 || t.y > 1.0) gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0);',
+      '  else gl_FragColor = vec4(texture2D(map, vec2((t.x + (right ? 1.0 : 0.0)) * 0.5, t.y)).rgb * shade, 1.0);',
+      '}',
+    ].join('\n'),
+  });
+  const lensScene = new THREE.Scene(), lensCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+  const lensQuad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), lensMat);
+  lensQuad.frustumCulled = false;
+  lensScene.add(lensQuad);
+  const lensM = new THREE.Matrix4();
+  // works out, for this screen, how far each eye can see each way and where the lens centres fall; remade when the
+  // screen, the picture size or the drawing resolution changes
+  function lensFit(w, h) {
+    const pr = renderer.getPixelRatio(), key = [w, h, pr, lens.size].join();
+    if (key === lens.key) return;
+    lens.key = key;
+    const mm = PT_PER_MM * (lens.size / 100), wmm = w / mm, hmm = h / mm, d = VIEWER.toScreen, cap = Math.tan(VIEWER.maxDeg * D);
+    const see = (dist) => Math.min(cap, lensStretch(Math.max(0, dist) / d)); // how far out the eye sees through the lens, as a tangent
+    const below = Math.min(hmm * 0.7, Math.max(hmm * 0.3, VIEWER.baseline - BEZEL_MM)); // the lens centre above the picture's lower edge
+    const outer = see((wmm - VIEWER.lensSep) / 2), inner = see(VIEWER.lensSep / 2), down = see(below), up = see(hmm - below);
+    const u = lensMat.uniforms;
+    u.size.value.set(wmm / d, hmm / d);
+    u.cL.value.set(0.5 - VIEWER.lensSep / 2 / wmm, below / hmm);
+    u.cR.value.set(0.5 + VIEWER.lensSep / 2 / wmm, below / hmm);
+    u.fL.value.set(outer, inner, down, up);
+    u.fR.value.set(inner, outer, down, up);
+    u.rmax.value = cap;
+    lens.fov = { outer: Math.atan(outer) / D, inner: Math.atan(inner) / D, up: Math.atan(up) / D, down: Math.atan(down) / D };
+    const n = camera.near, f = camera.far;
+    lens.eyeL.projectionMatrix.makePerspective(-outer * n, inner * n, up * n, -down * n, n, f);
+    lens.eyeR.projectionMatrix.makePerspective(-inner * n, outer * n, up * n, -down * n, n, f);
+    [lens.eyeL, lens.eyeR].forEach((c) => { c.projectionMatrixInverse.copy(c.projectionMatrix).invert(); c.matrixAutoUpdate = false; });
+    // the off-screen picture: as sharp at its middle as the screen is there, held to a size a phone draws comfortably
+    const perTan = d * mm * pr, k = Math.min(1, 1500 / ((outer + inner) * perTan), 1500 / ((up + down) * perTan));
+    const ew = Math.max(64, Math.round((outer + inner) * perTan * k)), eh = Math.max(64, Math.round((up + down) * perTan * k));
+    if (lens.rt) lens.rt.dispose();
+    lens.rt = new THREE.WebGLRenderTarget(ew * 2, eh, { minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter, depthBuffer: true });
+    lens.ew = ew; lens.eh = eh;
+    u.map.value = lens.rt.texture;
+  }
+  function lensRender(w, h) {
+    lensFit(w, h);
+    const rt = lens.rt, half = stereo.eyeSep / 2;
+    [[lens.eyeL, -half, 0], [lens.eyeR, half, lens.ew]].forEach(([cam, dx, x]) => {
+      cam.matrix.copy(camera.matrixWorld).multiply(lensM.makeTranslation(dx, 0, 0));
+      cam.matrixWorld.copy(cam.matrix);
+      cam.matrixWorldInverse.copy(cam.matrixWorld).invert();
+      rt.viewport.set(x, 0, lens.ew, lens.eh); rt.scissor.set(x, 0, lens.ew, lens.eh); rt.scissorTest = true;
+      renderer.setRenderTarget(rt);
+      renderer.clear();
+      renderer.render(scene, cam);
+    });
+    renderer.setRenderTarget(null);
+    renderer.setScissorTest(false);
+    renderer.setViewport(0, 0, w, h);
+    renderer.render(lensScene, lensCam);
+  }
   scene.add(new THREE.HemisphereLight(0xffffff, 0x334455, 1.0));
   const sun = new THREE.DirectionalLight(0xffffff, 0.7);
   sun.position.set(1, 3, 2);
@@ -761,7 +853,8 @@
     const w = S.w, h = S.h; // the renderer takes these in screen pixels and applies the pixel ratio itself
     renderer.setScissorTest(false);
     renderer.clear();
-    if (STEREO) {
+    if (STEREO && lens.on) lensRender(w, h);
+    else if (STEREO) {
       stereo.update(camera);
       renderer.setScissorTest(true);
       renderer.setScissor(0, 0, w / 2, h); renderer.setViewport(0, 0, w / 2, h);
@@ -834,7 +927,7 @@
   document.addEventListener('visibilitychange', () => { if (document.hidden && S.on) stop(); });
 
   // for checks: read the state, point the head, or place the hand in the camera picture
-  window.__fruitVR = { S, blade, lidar, dist, look(yawDeg, pitchDeg) { drag.yaw = yawDeg * D; drag.pitch = pitchDeg * D; }, hand(u, v) { if (u == null) handRaw.ok = false; else { handRaw.ok = true; handRaw.u = u; handRaw.v = v; handRaw.vu = handRaw.vv = 0; } }, perf, snd, handNow(u, v, vu, vv, agoMs) { Object.assign(handRaw, { u, v, vu, vv, t: performance.now() - agoMs }); return handNow(performance.now(), [0, 0]); }, setMode(m) { S.mode = m; }, pic, handDir(u, v) { const d = videoDir(u, v, new THREE.Vector3()); return [d.x, d.y, d.z]; } };
+  window.__fruitVR = { S, lens, blade, lidar, dist, look(yawDeg, pitchDeg) { drag.yaw = yawDeg * D; drag.pitch = pitchDeg * D; }, hand(u, v) { if (u == null) handRaw.ok = false; else { handRaw.ok = true; handRaw.u = u; handRaw.v = v; handRaw.vu = handRaw.vv = 0; } }, perf, snd, handNow(u, v, vu, vv, agoMs) { Object.assign(handRaw, { u, v, vu, vv, t: performance.now() - agoMs }); return handNow(performance.now(), [0, 0]); }, setMode(m) { S.mode = m; }, pic, handDir(u, v) { const d = videoDir(u, v, new THREE.Vector3()); return [d.x, d.y, d.z]; } };
 })();
 </script>
 </body>
