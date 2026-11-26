@@ -450,7 +450,12 @@
   // "Dual Wide") that can zoom out to the ultra-wide lens; failing that, the ordinary one. Whichever opens is then zoomed
   // out as far as it goes, and a candidate is kept only if it really is a rear camera.
   const camSize = { width: { ideal: 1280 }, height: { ideal: 720 } };
-  const openCam = (how) => navigator.mediaDevices.getUserMedia({ audio: false, video: Object.assign({}, how, camSize) });
+  // The camera is asked for 60 pictures a second where it can give them: the hand is then seen twice as often, so the
+  // blade or crosshair is fresher and a fast hand moves less between sightings. It is a wish, not a demand, so a camera
+  // that only does 30 still opens; and if a phone refuses the request outright, it is asked again without it.
+  const openCam = (how) =>
+    navigator.mediaDevices.getUserMedia({ audio: false, video: Object.assign({}, how, camSize, { frameRate: { ideal: 60 } }) })
+      .catch(() => navigator.mediaDevices.getUserMedia({ audio: false, video: Object.assign({}, how, camSize) }));
   const stopCam = (st) => st.getTracks().forEach((t) => t.stop());
   async function zoomOut(track) {
     try {
@@ -495,6 +500,7 @@
     }
     if (!(await pictures(3000))) { stopCam(st); throw new Error('The camera gave no picture'); }
     S.cam = track.label || '';
+    S.camFps = (track.getSettings && Math.round(track.getSettings().frameRate || 0)) || 0; // what the camera settled on
     return st;
   }
   async function loadHands() {
@@ -705,7 +711,7 @@
       acc: m.swipes ? m.cuts / m.swipes : 0, peakV: m.peakV, meanV: m.vN ? m.vSum / m.vN : 0,
       hand: S.mode === 'hand' ? { frames, lost: m.lostFrames, lostPct: frames ? m.lostFrames / frames : 1, fps: frames / dur, detectMs: detN ? detMs / detN : 0, label: handRaw.label } : null,
       aim: { n: m.aimN, dx: ex, dy: ey, rms: m.aimN ? Math.sqrt(m.aimSq / m.aimN) : 0, missNear: m.missN ? m.missSum / m.missN : null },
-      bias: { x: bias.x, y: bias.y }, lidar: S.lidar, screen: [innerWidth, innerHeight], cam: S.cam || '', streak: m.best, fps: perf.sum ? (1000 * perf.n) / perf.sum : 0, res: perf.pr,
+      bias: { x: bias.x, y: bias.y }, lidar: S.lidar, screen: [innerWidth, innerHeight], cam: S.cam || '', camFps: S.camFps || 0, streak: m.best, fps: perf.sum ? (1000 * perf.n) / perf.sum : 0, res: perf.pr,
     };
     const rows = store.get('fruitVRRounds', []);
     rows.push(row);
@@ -916,7 +922,7 @@
     try { if (wake) wake.release(); } catch (e) {}
     wake = null;
     if ($('status').textContent === 'Starting…' || $('status').textContent === 'Loading the hand tracker…') say('');
-    if (S.cam && !$('status').textContent) say('Camera used: ' + S.cam);
+    if (S.cam && !$('status').textContent) say('Camera used: ' + S.cam + (S.camFps ? ', ' + S.camFps + ' pictures a second' : ''));
     drawRounds();
   }
   $('go').onclick = start;
