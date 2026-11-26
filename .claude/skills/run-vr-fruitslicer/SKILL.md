@@ -99,6 +99,11 @@ gh run list --repo tbirdpower3000/VR-FruitSlicer --limit 1
 - **A fruit's `age` stops counting at 0.2 s** (it only drives the grow-in), so do not use it to pick targets.
 - **The `ios/` folder** is a Swift wrapper app built by GitHub Actions on a Mac runner. It cannot be built or run in this container.
 
+- **The shared engine comes from the VR-Portal site,** which the sandbox cannot reach.
+  The driver serves `../vr-portal/v1/vr-engine.js` in its place when that checkout exists
+  beside this repo (clone `tbirdpower3000/VR-Portal` to `../vr-portal`). Without it the
+  setup page says "The VR engine could not be loaded" and the driver times out.
+
 ## Troubleshooting
 
 - **Driver times out waiting for the hook:** the game script did not run. Check the

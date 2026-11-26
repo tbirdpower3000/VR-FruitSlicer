@@ -102,6 +102,7 @@ this site. Checked in a desktop browser; not yet looked at through a viewer.
 The version is shown beside the title on the setup page and saved with every round
 (`ver`). It goes up by one with every change to the game. Newest first.
 
+- **v0.13** (26 Nov 2026): Runs on the shared VR engine (the VR-Portal repo, engine 1.0.0): the drawing surface, lens fitting, text signs, camera, hand finder, sound and saved settings are loaded from there and no longer kept in this page. Nothing should look or play differently
 - **v0.12** (26 Nov 2026): Version numbers: shown beside the title, saved with each round
 - **v0.11** (26 Nov 2026): Hand finder: look at a part of the picture that follows the hand
 - **v0.10** (26 Nov 2026): Hand finder: fall back to the processor, and say what went wrong
@@ -116,6 +117,15 @@ The version is shown beside the title on the setup page and saved with every rou
 - **v0.1** (23 Nov 2026): Fruit Slicer VR: standalone spin-out of fruit-vr.html
 
 ## Design notes
+
+**The shared engine.** About half of this page used to be the same code as Skeet VR's,
+copied by hand. That half now lives once, in the
+[VR-Portal](https://github.com/tbirdpower3000/VR-Portal) repo, and this page loads it
+from `https://tbirdpower3000.github.io/VR-Portal/v1/vr-engine.js`. Before the change, each
+shared part of this page was compared with the code the engine was made from and found
+identical. The page keeps what is Fruit Slicer's own: head tracking, the blade, the aim
+correction, the fruit, the scoring and the LiDAR readout. If the engine cannot be loaded,
+the setup page says so and Start is switched off.
 
 **Finding a small hand through the widest camera.** The game always opens the widest
 rear camera, and through it a hand at arm's length is only about a tenth of the
