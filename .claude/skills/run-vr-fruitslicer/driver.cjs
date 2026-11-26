@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Launches this VR game in headless Chromium and plays a round, taking screenshots.
 // Usage, from the repo root:
-//   node .claude/skills/run-<name>/driver.cjs [--mode gaze|hand] [--lens on|off] [--out DIR] [--eval 'JS'] [--size 852x393]
+//   node .claude/skills/run-<name>/driver.cjs [--mode gaze|hand] [--lens on|off] [--practice] [--out DIR] [--eval 'JS'] [--size 852x393]
 // It serves the repo itself, so no other server is needed. Prints one JSON summary; exits 1 on a page error or if the
 // round does not finish.
 const http = require('http'), fs = require('fs'), path = require('path'), os = require('os'), { execSync } = require('child_process');
@@ -11,6 +11,7 @@ const arg = (name, dflt) => { const i = process.argv.indexOf('--' + name); retur
 const ROOT = process.cwd(), SKILL = __dirname;
 const MODE = arg('mode', 'gaze'), LENS = arg('lens', 'on'), OUT = path.resolve(arg('out', path.join(os.tmpdir(), 'vr-run'))), EVAL = arg('eval', null);
 const [W, H] = arg('size', '852x393').split('x').map(Number);
+const PRACTICE = process.argv.includes('--practice'); // Skeet only: go through the practice step with the stand-in hand
 if (!fs.existsSync(path.join(ROOT, 'index.html'))) { console.error('Run this from the repo root (index.html not found in ' + ROOT + ')'); process.exit(2); }
 
 // three.js r128 comes from cdnjs, which a sandbox may block; a copy is taken from npm once and served in its place
@@ -53,11 +54,35 @@ const server = http.createServer((req, res) => {
   const title = (await page.textContent('h1')).trim();
 
   if (MODE === 'gaze') { await page.check('input[value=head]'); await page.uncheck('#room'); }
+  const hasPractice = await page.$('#practice');
+  if (hasPractice) await page.setChecked('#practice', MODE === 'hand' && PRACTICE);
   await page.click('#go');
-  await page.waitForFunction(() => (window.__skeet || window.__fruitVR).S.phase === 'wait', null, { timeout: 15000 });
-  await page.waitForTimeout(MODE === 'hand' ? 1500 : 400);
-  shots.push(await shot('02-ready'));
-  await page.mouse.click(W / 4, H / 2); // the viewer's button is a tap on the screen; it starts the round
+  if (hasPractice && MODE === 'hand' && PRACTICE) {
+    // Skeet's practice: point the stand-in finger at the hanging disc, hold the thumb up, drop it; three discs
+    await page.waitForFunction(() => window.__skeet.S.phase === 'practice', null, { timeout: 15000 });
+    let pshot = false;
+    for (let i = 0; i < 400; i++) {
+      const st = await page.evaluate(() => {
+        const K = window.__skeet, P = K.PR; if (K.S.phase !== 'practice') return 'done';
+        if (P.disc) { // where the disc falls in the camera picture, as the head sees it now
+          const d = P.disc.m.position.clone().normalize().applyQuaternion(K.camera.quaternion.clone().invert()), k = -30 / d.z;
+          window.__fake.u = 0.5 + (d.x * k) / K.pic.lx; window.__fake.v = 0.5 - (d.y * k) / K.pic.ly;
+        }
+        window.__fake.thumb = P.disc && P.step === 3 ? 0.2 : 0.9; // thumb up (81 degrees), dropped (18) on the last step
+        return 'step ' + P.step + ' disc ' + P.n;
+      });
+      if (st === 'done') break;
+      if (!pshot && st.startsWith('step 3')) { shots.push(await shot('02a-practice')); pshot = true; }
+      await page.waitForTimeout(100);
+    }
+  }
+  const practised = await page.evaluate(() => { const K = window.__skeet || window.__fruitVR; return !!K.S.practice; });
+  if (!practised) {
+    await page.waitForFunction(() => (window.__skeet || window.__fruitVR).S.phase === 'wait', null, { timeout: 15000 });
+    await page.waitForTimeout(MODE === 'hand' ? 1500 : 400);
+    shots.push(await shot('02-ready'));
+    await page.mouse.click(W / 4, H / 2); // the viewer's button is a tap on the screen; it starts the round
+  }
   await page.waitForFunction(() => (window.__skeet || window.__fruitVR).S.phase === 'play', null, { timeout: 15000 });
 
   // play: look at whatever is in the air (gaze), or drop the stand-in thumb now and then (hand)
@@ -80,7 +105,7 @@ const server = http.createServer((req, res) => {
   shots.push(await shot('04-end'));
   const summary = await K((K) => {
     const rows = JSON.parse(localStorage.getItem(window.__skeet ? 'skeetVRRounds' : 'fruitVRRounds') || '[]'), r = rows[rows.length - 1] || null;
-    return { version: K.VERSION, mode: K.S.mode, lens: K.lens.on, handFinder: K.handSys.on, handSightings: K.roi.found, crosshairOrBlade: K.blade.ok, round: r && { ver: r.ver, hit: r.hit != null ? r.hit : r.sliced, thrown: r.thrown, shots: r.shots != null ? r.shots : r.swipes, cam: r.cam, handOn: r.handOn } };
+    return { version: K.VERSION, mode: K.S.mode, lens: K.lens.on, handFinder: K.handSys.on, handSightings: K.roi.found, crosshairOrBlade: K.blade.ok, practice: K.S.practice || undefined, round: r && { ver: r.ver, hit: r.hit != null ? r.hit : r.sliced, thrown: r.thrown, shots: r.shots != null ? r.shots : r.swipes, cam: r.cam, handOn: r.handOn } };
   });
   let evalResult;
   if (EVAL) evalResult = await page.evaluate(([src]) => { const K = window.__skeet || window.__fruitVR; return new Function('K', 'return (' + src + ')')(K); }, [EVAL]);
