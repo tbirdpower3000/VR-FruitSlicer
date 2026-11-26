@@ -503,13 +503,34 @@
     S.camFps = (track.getSettings && Math.round(track.getSettings().frameRate || 0)) || 0; // what the camera settled on
     return st;
   }
+  // The hand finder. It is tried on the phone's graphics chip first, which is quickest. If that cannot be set up, or it
+  // is set up but then fails on picture after picture, the same hand finder is made on the ordinary processor instead:
+  // slower, but it runs everywhere. What went wrong is kept, to be shown on the setup page and saved with the round.
+  const HAND_MODEL = 'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task';
+  const handSys = { on: '', err: '', make: null, fails: 0, swapping: false };
+  const errText = (e) => String((e && (e.message || e.name)) || e || 'unknown').slice(0, 120);
   async function loadHands() {
-    const { FilesetResolver, HandLandmarker } = await import(MP + '/vision_bundle.mjs');
-    const fs = await FilesetResolver.forVisionTasks(MP + '/wasm');
-    landmarker = await HandLandmarker.createFromOptions(fs, {
-      baseOptions: { modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task', delegate: 'GPU' },
+    handSys.err = '';
+    let mod;
+    try { mod = await import(MP + '/vision_bundle.mjs'); }
+    catch (e) { await new Promise((r) => setTimeout(r, 600)); mod = await import(MP + '/vision_bundle.mjs?again=1'); } // one more try at fetching it
+    const fs = await mod.FilesetResolver.forVisionTasks(MP + '/wasm');
+    handSys.make = (delegate) => mod.HandLandmarker.createFromOptions(fs, {
+      baseOptions: { modelAssetPath: HAND_MODEL, delegate },
       runningMode: 'VIDEO', numHands: 1, minHandDetectionConfidence: 0.5, minTrackingConfidence: 0.5,
     });
+    try { landmarker = await handSys.make('GPU'); handSys.on = 'GPU'; }
+    catch (e) { handSys.err = 'graphics chip: ' + errText(e); landmarker = await handSys.make('CPU'); handSys.on = 'CPU'; }
+    handSys.fails = 0;
+  }
+  // the graphics-chip hand finder has failed on twenty pictures running: change to the processor one
+  async function handSwap(e) {
+    if (handSys.swapping || handSys.on !== 'GPU' || !handSys.make) return;
+    handSys.swapping = true;
+    handSys.err = 'graphics chip, while running: ' + errText(e);
+    try { const next = await handSys.make('CPU'); try { landmarker.close(); } catch (x) {} landmarker = next; handSys.on = 'CPU'; handSys.fails = 0; }
+    catch (x) { handSys.err += '; processor: ' + errText(x); }
+    handSys.swapping = false;
   }
   function trackHand(now) {
     if (!landmarker || vid.readyState < 2 || vid.currentTime === lastVT) return;
@@ -517,7 +538,7 @@
     lastVT = vid.currentTime;
     const t0 = performance.now();
     let res = null;
-    try { res = landmarker.detectForVideo(vid, now); } catch (e) { return; }
+    try { res = landmarker.detectForVideo(vid, now); handSys.fails = 0; } catch (e) { if (++handSys.fails >= 20) handSwap(e); return; }
     const ms = performance.now() - t0;
     detMs += ms; detN++;
     skip = ms > 28;
@@ -711,7 +732,7 @@
       acc: m.swipes ? m.cuts / m.swipes : 0, peakV: m.peakV, meanV: m.vN ? m.vSum / m.vN : 0,
       hand: S.mode === 'hand' ? { frames, lost: m.lostFrames, lostPct: frames ? m.lostFrames / frames : 1, fps: frames / dur, detectMs: detN ? detMs / detN : 0, label: handRaw.label } : null,
       aim: { n: m.aimN, dx: ex, dy: ey, rms: m.aimN ? Math.sqrt(m.aimSq / m.aimN) : 0, missNear: m.missN ? m.missSum / m.missN : null },
-      bias: { x: bias.x, y: bias.y }, lidar: S.lidar, screen: [innerWidth, innerHeight], cam: S.cam || '', camFps: S.camFps || 0, streak: m.best, fps: perf.sum ? (1000 * perf.n) / perf.sum : 0, res: perf.pr,
+      bias: { x: bias.x, y: bias.y }, lidar: S.lidar, screen: [innerWidth, innerHeight], cam: S.cam || '', camFps: S.camFps || 0, handOn: handSys.on, handErr: handSys.err, streak: m.best, fps: perf.sum ? (1000 * perf.n) / perf.sum : 0, res: perf.pr,
     };
     const rows = store.get('fruitVRRounds', []);
     rows.push(row);
@@ -901,7 +922,7 @@
     }
     if (S.mode === 'hand' && !landmarker) {
       say('Loading the hand tracker…');
-      try { await loadHands(); } catch (e) { S.mode = 'head'; say('The hand tracker could not be loaded, so the blade follows your gaze.'); }
+      try { await loadHands(); } catch (e) { handSys.err += (handSys.err ? '; ' : '') + errText(e); S.mode = 'head'; say('The hand tracker could not be loaded (' + handSys.err + '), so the blade follows your gaze.'); }
     }
     vplane.visible = !!(S.showRoom && S.stream);
     room.visible = !vplane.visible;
@@ -922,7 +943,7 @@
     try { if (wake) wake.release(); } catch (e) {}
     wake = null;
     if ($('status').textContent === 'Starting…' || $('status').textContent === 'Loading the hand tracker…') say('');
-    if (S.cam && !$('status').textContent) say('Camera used: ' + S.cam + (S.camFps ? ', ' + S.camFps + ' pictures a second' : ''));
+    if (S.cam && !$('status').textContent) say('Camera used: ' + S.cam + (S.camFps ? ', ' + S.camFps + ' pictures a second' : '') + (handSys.on ? '. Hand finder on the ' + (handSys.on === 'GPU' ? 'graphics chip' : 'processor') : '') + (handSys.err ? ' (' + handSys.err + ')' : '') + '.');
     drawRounds();
   }
   $('go').onclick = start;
