@@ -24,8 +24,9 @@ button (a tap on the screen).
   camera or the hand tracker isn't available.
 - **See my room** shows the rear camera behind the fruit instead of the virtual
   room.
-- The page always opens the rear camera with the widest view: the ultra-wide (0.5×)
-  one where the phone has it, zoomed out as far as it goes.
+- **Camera lens:** Auto, Fisheye (the widest, 0.5×, zoomed out as far as it goes) or
+  Regular. Fisheye sees more and keeps your hand in view further out; Regular shows your
+  hand larger and steadier.
 - When a round ends, look at the board for two seconds or press the viewer's
   button to play again. Turn the phone upright to go back to the setup page.
 
@@ -102,6 +103,7 @@ this site. Checked in a desktop browser; not yet looked at through a viewer.
 The version is shown beside the title on the setup page and saved with every round
 (`ver`). It goes up by one with every change to the game. Newest first.
 
+- **v0.14** (26 Nov 2026): A choice of camera lens on the setup page: Auto, Fisheye (widest) or Regular. In Auto the widest camera is tried again after a single failure and left alone only after failing twice running (engine 1.1.0)
 - **v0.13** (26 Nov 2026): Runs on the shared VR engine (the VR-Portal repo, engine 1.0.0): the drawing surface, lens fitting, text signs, camera, hand finder, sound and saved settings are loaded from there and no longer kept in this page. Nothing should look or play differently
 - **v0.12** (26 Nov 2026): Version numbers: shown beside the title, saved with each round
 - **v0.11** (26 Nov 2026): Hand finder: look at a part of the picture that follows the hand

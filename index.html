@@ -47,6 +47,11 @@
     <label class="opt"><input type="radio" name="blade" value="hand" checked /><span><b>My hand</b> (rear camera)<br /><span class="muted">Hold a hand out in front of the viewer and swipe through the fruit with your index finger. The viewer must leave the phone's rear camera uncovered. The widest rear camera (0.5×) is used where the phone has one.</span></span></label>
     <label class="opt"><input type="radio" name="blade" value="head" /><span><b>My gaze</b><br /><span class="muted">The blade sits where you look; sweep your head across the fruit. No camera needed.</span></span></label>
     <label class="opt"><input type="checkbox" id="room" checked /><span><b>See my room</b><br /><span class="muted">Shows the rear camera behind the fruit instead of the virtual room.</span></span></label>
+    <div class="opt" role="radiogroup" aria-label="Camera lens" style="display:block;padding:8px 0"><b>Camera lens</b><br />
+      <label style="margin-right:14px"><input type="radio" name="camLens" value="auto" checked /> Auto</label>
+      <label style="margin-right:14px"><input type="radio" name="camLens" value="wide" /> Fisheye (widest)</label>
+      <label><input type="radio" name="camLens" value="regular" /> Regular</label><br />
+      <span class="muted">Fisheye sees more of the room and keeps your hand in view further out to the sides, but your hand looks smaller to the hand finder. Regular sees less, with your hand larger and steadier. Auto uses the fisheye unless it has failed twice on this phone.</span></div>
     <label class="opt"><input type="checkbox" id="lensOn" checked /><span><b>Fit the picture to the lenses</b><br /><span class="muted">Shapes and places each eye's picture for a Google Cardboard (2015) viewer: centred behind each lens, at true size, with the lenses' stretching towards the edges taken out. Turn it off for another kind of viewer.</span></span></label>
     <label class="opt" for="lensSize"><span style="flex:1"><b>Picture size</b> <output id="lensSizeO">100%</output><br /><input type="range" id="lensSize" min="80" max="125" step="1" value="100" style="width:100%" /><br /><span class="muted">Leave at 100% on an iPhone. On another phone, if things look too big or too small, or the two pictures won't come together, try a little either way.</span></span></label>
     <label class="opt"><input type="checkbox" id="sound" checked /><span><b>Sound</b><br /><span class="muted">Blade, splat and streak sounds. On an iPhone the side switch must not be on silent.</span></span></label>
@@ -96,7 +101,7 @@
   const store = VRE.store;
   // The version of this page. It goes up by one with every change to the game, is shown beside the title, and is saved
   // with each round, so it is always clear which version is on screen and which one a result came from.
-  const VERSION = 'v0.13';
+  const VERSION = 'v0.14';
   $('ver').textContent = VERSION;
   const say = (t) => ($('status').textContent = t || '');
 
@@ -297,7 +302,7 @@
   }
   const hn = [0, 0];
   // the rear camera (widest view, 60 pictures a second, recovery if it gives no picture): opened by the engine
-  const { startCamera } = VRE.camera({ vid, plainKey: 'fruitVRPlainCam', info: { set cam(v) { S.cam = v; }, set camFps(v) { S.camFps = v; } } });
+  const { startCamera } = VRE.camera({ vid, plainKey: 'fruitVRPlainCam', info: { set cam(v) { S.cam = v; }, set camFps(v) { S.camFps = v; }, set camWide(v) { S.camWide = v; }, set camLens(v) { S.camLens = v; } }, lens: VRE.lensChoice() });
   // the hand finder (graphics chip first, processor if not; looks at a part of the picture that follows the hand)
   const hands = VRE.hands({ vid, MP });
   const { handSys, errText, loadHands, handSwap, roi, roiSource, roiAfter } = hands;
@@ -502,7 +507,7 @@
       acc: m.swipes ? m.cuts / m.swipes : 0, peakV: m.peakV, meanV: m.vN ? m.vSum / m.vN : 0,
       hand: S.mode === 'hand' ? { frames, lost: m.lostFrames, lostPct: frames ? m.lostFrames / frames : 1, fps: frames / dur, detectMs: detN ? detMs / detN : 0, label: handRaw.label } : null,
       aim: { n: m.aimN, dx: ex, dy: ey, rms: m.aimN ? Math.sqrt(m.aimSq / m.aimN) : 0, missNear: m.missN ? m.missSum / m.missN : null },
-      bias: { x: bias.x, y: bias.y }, lidar: S.lidar, screen: [innerWidth, innerHeight], cam: S.cam || '', camFps: S.camFps || 0, handOn: handSys.on, handErr: handSys.err, handLooks: { found: roi.found, moves: roi.moves }, streak: m.best, fps: perf.sum ? (1000 * perf.n) / perf.sum : 0, res: perf.pr,
+      bias: { x: bias.x, y: bias.y }, lidar: S.lidar, screen: [innerWidth, innerHeight], cam: S.cam || '', camFps: S.camFps || 0, camLens: S.camLens || '', camWide: S.camWide || '', handOn: handSys.on, handErr: handSys.err, handLooks: { found: roi.found, moves: roi.moves }, streak: m.best, fps: perf.sum ? (1000 * perf.n) / perf.sum : 0, res: perf.pr,
     };
     const rows = store.get('fruitVRRounds', []);
     rows.push(row);
@@ -678,7 +683,7 @@
     try { if (wake) wake.release(); } catch (e) {}
     wake = null;
     if ($('status').textContent === 'Starting…' || $('status').textContent === 'Loading the hand tracker…') say('');
-    if (S.cam && !$('status').textContent) say('Camera used: ' + S.cam + (S.camFps ? ', ' + S.camFps + ' pictures a second' : '') + (handSys.on ? '. Hand finder on the ' + (handSys.on === 'GPU' ? 'graphics chip' : 'processor') : '') + (handSys.err ? ' (' + handSys.err + ')' : '') + '.');
+    if (S.cam && !$('status').textContent) say('Camera used: ' + S.cam + (S.camFps ? ', ' + S.camFps + ' pictures a second' : '') + (S.camWide ? ' (widest camera: ' + S.camWide + ')' : '') + (handSys.on ? '. Hand finder on the ' + (handSys.on === 'GPU' ? 'graphics chip' : 'processor') : '') + (handSys.err ? ' (' + handSys.err + ')' : '') + '.');
     drawRounds();
   }
   $('go').onclick = start;
