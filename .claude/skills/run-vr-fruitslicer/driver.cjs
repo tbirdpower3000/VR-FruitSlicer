@@ -40,6 +40,9 @@ const server = http.createServer((req, res) => {
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
   await page.route('**/three.min.js', (r) => r.fulfill({ path: threeJs(), contentType: 'text/javascript' }));
+  // the shared engine is loaded from the VR-Portal site; a checkout beside this repo is served in its place when there is one
+  const engine = path.join(ROOT, '..', 'vr-portal', 'v1', 'vr-engine.js');
+  if (fs.existsSync(engine)) await page.route('**/vr-engine.js', (r) => r.fulfill({ path: engine, contentType: 'text/javascript' }));
   await page.route('**/vision_bundle.mjs*', (r) => r.fulfill({ path: path.join(SKILL, 'fake-hands.mjs'), contentType: 'text/javascript' }));
   await page.addInitScript(([lens]) => { try { localStorage.setItem('vrLens', JSON.stringify({ on: lens === 'on', size: 100 })); } catch (e) {} window.__fake = { on: true, u: 0.5, v: 0.45, hw: 0.11, thumb: 0.6 }; }, [LENS]);
   await page.goto(url, { waitUntil: 'load' });
