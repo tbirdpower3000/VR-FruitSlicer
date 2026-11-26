@@ -97,6 +97,27 @@ k2 = 0.55348791.
 pixel. Both settings are kept in the browser (`vrLens`) and shared by the games on
 this site. Checked in a desktop browser; not yet looked at through a viewer.
 
+## Design notes
+
+**Safari's address bar in the viewer.** On an iPhone a web page cannot hide Safari's
+address bar or toolbar: iPhone Safari does not offer full screen to pages (Android
+browsers and iPads do). So the page does not try. The ways to play without the bar:
+
+- **Add to Home Screen** (Share → Add to Home Screen) and open the game from its icon.
+  It then runs with no browser bars. This is the recommended way. Rounds saved in a
+  Safari tab are kept separately from rounds saved from the icon.
+- **Hide Toolbar** from Safari's page menu (the aA button). The bar returns when the
+  top of the screen is tapped, so it is less dependable inside a viewer.
+- A wrapper app with no browser bars (the sideloaded Fruit VR app).
+
+The lens fitting measures up from the bottom edge of the picture, which is the edge
+the phone rests on in the viewer. A bar across the top therefore costs a strip of
+picture but does not move the picture off the lenses.
+
+Not built yet: asking for full screen on Start where the browser allows it (Android,
+iPad), and a one-line tip on the setup page when the game is open in an iPhone Safari
+tab.
+
 ## Test switches (URL options)
 
 - `?stereo=0` / `?stereo=1`: force one view or the split view.
