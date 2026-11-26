@@ -523,6 +523,40 @@
     catch (e) { handSys.err = 'graphics chip: ' + errText(e); landmarker = await handSys.make('CPU'); handSys.on = 'CPU'; }
     handSys.fails = 0;
   }
+  // Looking for the hand in part of the picture. Through the widest camera a hand at arm's length is only about a
+  // tenth of the picture's width, and the hand finder, which first shrinks the picture to a small square, cannot make
+  // out a hand that small. So it is given a part of the picture half as wide and half as tall, in which the hand looks
+  // twice the size. That part follows the hand. While no hand is found, the part steps round the picture (the middle
+  // first, then below, the sides and above, then the whole picture for a hand held close), three looks at each place.
+  const ROI_GRID = [[0.5, 0.5], [0.5, 0.75], [0.25, 0.5], [0.75, 0.5], [0.25, 0.75], [0.75, 0.75], [0.5, 0.25], [0.25, 0.25], [0.75, 0.25]];
+  const roi = { s: 0.5, cx: 0.5, cy: 0.5, sUsed: 1, lUsed: 0, tUsed: 0, lost: 0, k: 0, found: 0, moves: 0, cv: document.createElement('canvas') };
+  roi.x = roi.cv.getContext('2d');
+  function roiSource() {
+    const vw = vid.videoWidth, vh = vid.videoHeight;
+    if (roi.s >= 1 || !vw || !vh) { roi.sUsed = 1; roi.lUsed = roi.tUsed = 0; return vid; }
+    const s = roi.s, l = Math.max(0, Math.min(1 - s, roi.cx - s / 2)), t = Math.max(0, Math.min(1 - s, roi.cy - s / 2)), w = 640, h = Math.max(2, Math.round((640 * vh) / vw));
+    if (roi.cv.width !== w || roi.cv.height !== h) { roi.cv.width = w; roi.cv.height = h; }
+    roi.x.drawImage(vid, l * vw, t * vh, s * vw, s * vh, 0, 0, w, h);
+    roi.sUsed = s; roi.lUsed = l; roi.tUsed = t;
+    return roi.cv;
+  }
+  // after a look: put the hand's points back into whole-picture terms, and decide where to look next
+  function roiAfter(lm) {
+    if (lm) {
+      let x0 = 1, x1 = 0, y0 = 1, y1 = 0;
+      for (const q of lm) { if (q.x < x0) x0 = q.x; if (q.x > x1) x1 = q.x; if (q.y < y0) y0 = q.y; if (q.y > y1) y1 = q.y; }
+      const s = roi.sUsed, l = roi.lUsed, t = roi.tUsed, size = Math.max(x1 - x0, y1 - y0);
+      for (const q of lm) { q.x = l + q.x * s; q.y = t + q.y * s; }
+      const mx = l + ((x0 + x1) / 2) * s, my = t + ((y0 + y1) / 2) * s;
+      roi.lost = 0; roi.found++;
+      if (s < 1 && size > 0.7) roi.s = 1;                                                        // held close: the whole picture
+      else if (s >= 1 && size < 0.22) { roi.s = 0.5; roi.cx = mx; roi.cy = my; roi.moves++; }    // small: look closer, round the hand
+      else if (s < 1 && (x0 < 0.12 || x1 > 0.88 || y0 < 0.12 || y1 > 0.88)) { roi.cx = mx; roi.cy = my; roi.moves++; } // nearing the edge of the part: move the part
+    } else if (++roi.lost >= 3) {
+      roi.lost = 0; roi.k = (roi.k + 1) % (ROI_GRID.length + 1);
+      if (roi.k === ROI_GRID.length) roi.s = 1; else { roi.s = 0.5; roi.cx = ROI_GRID[roi.k][0]; roi.cy = ROI_GRID[roi.k][1]; }
+    }
+  }
   // the graphics-chip hand finder has failed on twenty pictures running: change to the processor one
   async function handSwap(e) {
     if (handSys.swapping || handSys.on !== 'GPU' || !handSys.make) return;
@@ -538,11 +572,12 @@
     lastVT = vid.currentTime;
     const t0 = performance.now();
     let res = null;
-    try { res = landmarker.detectForVideo(vid, now); handSys.fails = 0; } catch (e) { if (++handSys.fails >= 20) handSwap(e); return; }
+    try { res = landmarker.detectForVideo(roiSource(), now); handSys.fails = 0; } catch (e) { if (++handSys.fails >= 20) handSwap(e); return; }
     const ms = performance.now() - t0;
     detMs += ms; detN++;
     skip = ms > 28;
     const lm = res && res.landmarks && res.landmarks[0];
+    roiAfter(lm);
     if (lm) {
       // how fast the fingertip is crossing the picture, so the blade can be carried forward between camera pictures
       const ds = (now - handRaw.t) / 1000;
@@ -732,7 +767,7 @@
       acc: m.swipes ? m.cuts / m.swipes : 0, peakV: m.peakV, meanV: m.vN ? m.vSum / m.vN : 0,
       hand: S.mode === 'hand' ? { frames, lost: m.lostFrames, lostPct: frames ? m.lostFrames / frames : 1, fps: frames / dur, detectMs: detN ? detMs / detN : 0, label: handRaw.label } : null,
       aim: { n: m.aimN, dx: ex, dy: ey, rms: m.aimN ? Math.sqrt(m.aimSq / m.aimN) : 0, missNear: m.missN ? m.missSum / m.missN : null },
-      bias: { x: bias.x, y: bias.y }, lidar: S.lidar, screen: [innerWidth, innerHeight], cam: S.cam || '', camFps: S.camFps || 0, handOn: handSys.on, handErr: handSys.err, streak: m.best, fps: perf.sum ? (1000 * perf.n) / perf.sum : 0, res: perf.pr,
+      bias: { x: bias.x, y: bias.y }, lidar: S.lidar, screen: [innerWidth, innerHeight], cam: S.cam || '', camFps: S.camFps || 0, handOn: handSys.on, handErr: handSys.err, handLooks: { found: roi.found, moves: roi.moves }, streak: m.best, fps: perf.sum ? (1000 * perf.n) / perf.sum : 0, res: perf.pr,
     };
     const rows = store.get('fruitVRRounds', []);
     rows.push(row);
@@ -954,7 +989,7 @@
   document.addEventListener('visibilitychange', () => { if (document.hidden && S.on) stop(); });
 
   // for checks: read the state, point the head, or place the hand in the camera picture
-  window.__fruitVR = { S, lens, blade, lidar, dist, look(yawDeg, pitchDeg) { drag.yaw = yawDeg * D; drag.pitch = pitchDeg * D; }, hand(u, v) { if (u == null) handRaw.ok = false; else { handRaw.ok = true; handRaw.u = u; handRaw.v = v; handRaw.vu = handRaw.vv = 0; } }, perf, snd, handNow(u, v, vu, vv, agoMs) { Object.assign(handRaw, { u, v, vu, vv, t: performance.now() - agoMs }); return handNow(performance.now(), [0, 0]); }, setMode(m) { S.mode = m; }, pic, handDir(u, v) { const d = videoDir(u, v, new THREE.Vector3()); return [d.x, d.y, d.z]; } };
+  window.__fruitVR = { roi, handSys, S, lens, blade, lidar, dist, look(yawDeg, pitchDeg) { drag.yaw = yawDeg * D; drag.pitch = pitchDeg * D; }, hand(u, v) { if (u == null) handRaw.ok = false; else { handRaw.ok = true; handRaw.u = u; handRaw.v = v; handRaw.vu = handRaw.vv = 0; } }, perf, snd, handNow(u, v, vu, vv, agoMs) { Object.assign(handRaw, { u, v, vu, vv, t: performance.now() - agoMs }); return handNow(performance.now(), [0, 0]); }, setMode(m) { S.mode = m; }, pic, handDir(u, v) { const d = videoDir(u, v, new THREE.Vector3()); return [d.x, d.y, d.z]; } };
 })();
 </script>
 </body>

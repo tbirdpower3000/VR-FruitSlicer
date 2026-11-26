@@ -99,6 +99,20 @@ this site. Checked in a desktop browser; not yet looked at through a viewer.
 
 ## Design notes
 
+**Finding a small hand through the widest camera.** The game always opens the widest
+rear camera, and through it a hand at arm's length is only about a tenth of the
+picture's width. The hand finder first shrinks the picture to a small square, where a
+hand that size cannot be made out. So the hand finder is given a part of the picture
+half as wide and half as tall, in which the hand looks twice the size. The part follows
+the hand; while no hand is found it steps round the picture (middle, below, sides,
+above, then the whole picture for a hand held close). The view behind the game still
+shows the whole wide picture.
+
+**The hand finder's two ways of running.** It is tried on the phone's graphics chip
+first. If it cannot be set up there, or fails on twenty pictures running, it is made on
+the ordinary processor instead. After a round, the line under Start says which is in
+use and what went wrong, and both are saved with the round.
+
 **Safari's address bar in the viewer.** On an iPhone a web page cannot hide Safari's
 address bar or toolbar: iPhone Safari does not offer full screen to pages (Android
 browsers and iPads do). So the page does not try. The ways to play without the bar:
