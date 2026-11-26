@@ -68,7 +68,7 @@ const server = http.createServer((req, res) => {
           const d = P.disc.m.position.clone().normalize().applyQuaternion(K.camera.quaternion.clone().invert()), k = -30 / d.z;
           window.__fake.u = 0.5 + (d.x * k) / K.pic.lx; window.__fake.v = 0.5 - (d.y * k) / K.pic.ly;
         }
-        window.__fake.thumb = P.disc && P.step === 3 ? 0.2 : 0.9; // thumb up (81 degrees), dropped (18) on the last step
+        window.__fake.thumb = P.disc && P.step === 3 ? 0.2 : 0.7; // thumb up (a wide gap), dropped onto the finger on the last step
         return 'step ' + P.step + ' disc ' + P.n;
       });
       if (st === 'done') break;

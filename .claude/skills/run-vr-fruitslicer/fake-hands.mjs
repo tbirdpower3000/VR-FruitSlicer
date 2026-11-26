@@ -20,11 +20,10 @@ export const HandLandmarker = {
         const lm = Array.from({ length: 21 }, (_, i) => ({ x: x - size / 2 + (size * (i % 5)) / 4, y: y + (size * Math.floor(i / 5)) / 4, z: 0 }));
         lm[8] = { x, y, z: 0 };
         const w = Array.from({ length: 21 }, () => ({ x: 0, y: 0, z: 0 }));
-        // a hand in metres: index finger along -y; the thumb at an angle to it of (thumb x 90) degrees, so thumb 0.6 is
-        // 54 degrees (up) and 0.2 is 18 degrees (laid along the finger)
+        // a hand in metres. The thumb's tip sits (thumb x hand size) from the base of the index finger, so thumb 0.6 is
+        // a wide gap (up) and 0.2 a closed one (dropped onto the finger), which is what the game's trigger reads.
         w[9] = { x: 0, y: -0.09, z: 0 }; w[5] = { x: -0.02, y: -0.085, z: 0 }; w[6] = { x: -0.02, y: -0.125, z: 0 }; w[8] = { x: -0.02, y: -0.165, z: 0 }; w[17] = { x: 0.04, y: -0.075, z: 0 };
-        w[2] = { x: -0.04, y: -0.05, z: 0 };
-        { const a = ((f.thumb == null ? 0.6 : f.thumb) * 90 * Math.PI) / 180; w[4] = { x: w[2].x - 0.06 * Math.sin(a), y: w[2].y - 0.06 * Math.cos(a), z: 0 }; }
+        w[2] = { x: -0.04, y: -0.05, z: 0 }; w[4] = { x: -0.02 - 0.086 * (f.thumb == null ? 0.6 : f.thumb), y: -0.1, z: 0 }; w[3] = { x: (w[2].x + w[4].x) / 2, y: (w[2].y + w[4].y) / 2, z: 0 };
         return { landmarks: [lm], worldLandmarks: [w], handednesses: [[{ categoryName: 'Right' }]] };
       },
     };
