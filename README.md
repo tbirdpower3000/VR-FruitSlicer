@@ -97,6 +97,24 @@ k2 = 0.55348791.
 pixel. Both settings are kept in the browser (`vrLens`) and shared by the games on
 this site. Checked in a desktop browser; not yet looked at through a viewer.
 
+## Versions
+
+The version is shown beside the title on the setup page and saved with every round
+(`ver`). It goes up by one with every change to the game. Newest first.
+
+- **v0.12** (26 Nov 2026): Version numbers: shown beside the title, saved with each round
+- **v0.11** (26 Nov 2026): Hand finder: look at a part of the picture that follows the hand
+- **v0.10** (26 Nov 2026): Hand finder: fall back to the processor, and say what went wrong
+- **v0.9** (26 Nov 2026): Ask the camera for 60 pictures a second
+- **v0.8** (26 Nov 2026): Fit the picture to the lenses of a Google Cardboard (2015)
+- **v0.7** (23 Nov 2026): Throw the fruit ahead of where the player looks as the round begins
+- **v0.6** (23 Nov 2026): Safer camera switch, as in Skeet VR
+- **v0.5** (23 Nov 2026): Always open the rear camera with the widest view
+- **v0.4** (23 Nov 2026): Throw the fruit from further away
+- **v0.3** (23 Nov 2026): Wait for the viewer's button before the first round
+- **v0.2** (23 Nov 2026): LiDAR distance: a switch and an in-view readout (iPhone app)
+- **v0.1** (23 Nov 2026): Fruit Slicer VR: standalone spin-out of fruit-vr.html
+
 ## Design notes
 
 **Finding a small hand through the widest camera.** The game always opens the widest
