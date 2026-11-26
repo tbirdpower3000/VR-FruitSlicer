@@ -13,6 +13,26 @@ export const HandLandmarker = {
       close() {},
       detectForVideo(src) {
         const f = window.__fake, K = window.__skeet || window.__fruitVR, none = { landmarks: [], worldLandmarks: [], handednesses: [] };
+        // A recording of a real hand (the game's "Record my hand", handed over by driver.cjs --replay) is played back in
+        // place of the made-up hand: each look returns the recorded points for that moment, and the head is turned to
+        // where the recorded head pointed. The points are whole-picture, so they are put back into the part looked at.
+        const R = window.__replay;
+        if (R) {
+          const t = performance.now() - (R.start = R.start || performance.now());
+          let i = R.i || 0; while (i + 1 < R.f.length && R.f[i + 1][0] <= t) i++;
+          R.i = i; const r = R.f[i];
+          R.done = i + 1 >= R.f.length;
+          let j = R.j || 0; while (j + 1 < R.f.length && R.f[j + 1][0] - R.f[j + 1][1] <= t) j++; // the head as it is now, not as it was when the picture was taken
+          R.j = j; if (K.headQ) K.headQ(R.f[j].slice(2, 6).map((v) => v / 1e4));
+          if (R.done || !r[6] || r === R.last) return none; // one recorded look is handed back once, as one camera picture is
+          R.last = r;
+          const crop = src && src.tagName === 'CANVAS', s = crop ? K.roi.sUsed : 1, l = crop ? K.roi.lUsed : 0, tp = crop ? K.roi.tUsed : 0;
+          const lm = [], w = [];
+          for (let k = 0; k < 21; k++) { lm.push({ x: (r[7 + 2 * k] / 1e4 - l) / s, y: (r[8 + 2 * k] / 1e4 - tp) / s, z: 0 }); w.push({ x: r[49 + 3 * k] / 1e4, y: r[50 + 3 * k] / 1e4, z: r[51 + 3 * k] / 1e4 }); }
+          if (lm.some((q) => q.x < 0 || q.x > 1 || q.y < 0 || q.y > 1)) return none; // outside the part of the picture being looked at
+          R.seen = (R.seen || 0) + 1;
+          return { landmarks: [lm], worldLandmarks: r[112] ? [w] : [], handednesses: [[{ categoryName: 'Right' }]] };
+        }
         if (!f || !f.on) return none;
         const crop = src && src.tagName === 'CANVAS', s = crop ? K.roi.sUsed : 1, l = crop ? K.roi.lUsed : 0, t = crop ? K.roi.tUsed : 0;
         const size = (f.hw || 0.11) / s, x = (f.u - l) / s, y = (f.v - t) / s;

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Launches this VR game in headless Chromium and plays a round, taking screenshots.
 // Usage, from the repo root:
-//   node .claude/skills/run-<name>/driver.cjs [--mode gaze|hand] [--lens on|off] [--practice] [--out DIR] [--eval 'JS'] [--size 852x393]
+//   node .claude/skills/run-<name>/driver.cjs [--mode gaze|hand] [--lens on|off] [--practice] [--record FILE] [--replay FILE] [--out DIR] [--eval 'JS'] [--size 852x393]
 // It serves the repo itself, so no other server is needed. Prints one JSON summary; exits 1 on a page error or if the
 // round does not finish.
 const http = require('http'), fs = require('fs'), path = require('path'), os = require('os'), { execSync } = require('child_process');
@@ -11,6 +11,7 @@ const arg = (name, dflt) => { const i = process.argv.indexOf('--' + name); retur
 const ROOT = process.cwd(), SKILL = __dirname;
 const MODE = arg('mode', 'gaze'), LENS = arg('lens', 'on'), OUT = path.resolve(arg('out', path.join(os.tmpdir(), 'vr-run'))), EVAL = arg('eval', null);
 const [W, H] = arg('size', '852x393').split('x').map(Number);
+const RECORD = arg('record', ''), REPLAY = arg('replay', ''); // save the game's hand recording to a file; play one back as the hand
 const PRACTICE = process.argv.includes('--practice'); // Skeet only: go through the practice step with the stand-in hand
 if (!fs.existsSync(path.join(ROOT, 'index.html'))) { console.error('Run this from the repo root (index.html not found in ' + ROOT + ')'); process.exit(2); }
 
@@ -46,6 +47,7 @@ const server = http.createServer((req, res) => {
   if (fs.existsSync(engine)) await page.route('**/vr-engine.js', (r) => r.fulfill({ path: engine, contentType: 'text/javascript' }));
   await page.route('**/vision_bundle.mjs*', (r) => r.fulfill({ path: path.join(SKILL, 'fake-hands.mjs'), contentType: 'text/javascript' }));
   await page.addInitScript(([lens]) => { try { localStorage.setItem('vrLens', JSON.stringify({ on: lens === 'on', size: 100 })); } catch (e) {} window.__fake = { on: true, u: 0.5, v: 0.45, hw: 0.11, thumb: 0.6 }; }, [LENS]);
+  if (REPLAY) await page.addInitScript((rec) => { window.__replay = rec; }, JSON.parse(fs.readFileSync(REPLAY, 'utf8')));
   await page.goto(url, { waitUntil: 'load' });
   await page.waitForFunction(() => window.__skeet || window.__fruitVR, null, { timeout: 15000 });
   const shot = async (name) => { const f = path.join(OUT, name + '.png'); await page.screenshot({ path: f }); return f; };
@@ -56,6 +58,7 @@ const server = http.createServer((req, res) => {
   if (MODE === 'gaze') { await page.check('input[value=head]'); await page.uncheck('#room'); }
   const hasPractice = await page.$('#practice');
   if (hasPractice) await page.setChecked('#practice', MODE === 'hand' && PRACTICE);
+  if (RECORD && (await page.$('#recOn'))) await page.check('#recOn');
   await page.click('#go');
   if (hasPractice && MODE === 'hand' && PRACTICE) {
     // Skeet's practice: point the stand-in finger at the hanging disc, hold the thumb up, drop it; three discs
@@ -107,9 +110,12 @@ const server = http.createServer((req, res) => {
     const rows = JSON.parse(localStorage.getItem(window.__skeet ? 'skeetVRRounds' : 'fruitVRRounds') || '[]'), r = rows[rows.length - 1] || null;
     return { version: K.VERSION, mode: K.S.mode, lens: K.lens.on, handFinder: K.handSys.on, handSightings: K.roi.found, crosshairOrBlade: K.blade.ok, practice: K.S.practice || undefined, round: r && { ver: r.ver, hit: r.hit != null ? r.hit : r.sliced, thrown: r.thrown, shots: r.shots != null ? r.shots : r.swipes, cam: r.cam, handOn: r.handOn } };
   });
+  let recording;
+  if (RECORD) { const j = await K((K) => (K.rec && K.rec.frames ? K.rec.json() : '')); if (j) { fs.writeFileSync(RECORD, j); recording = { file: RECORD, looks: JSON.parse(j).f.length, kb: Math.round(j.length / 1024) }; } }
+  const replay = REPLAY ? await page.evaluate(() => ({ looks: window.__replay.f.length, handedBack: window.__replay.seen || 0, reachedEnd: !!window.__replay.done })) : undefined;
   let evalResult;
   if (EVAL) evalResult = await page.evaluate(([src]) => { const K = window.__skeet || window.__fruitVR; return new Function('K', 'return (' + src + ')')(K); }, [EVAL]);
-  console.log(JSON.stringify({ title, phase, ...summary, eval: evalResult, errors, screenshots: shots }, null, 1));
+  console.log(JSON.stringify({ title, phase, ...summary, recording, replay, eval: evalResult, errors, screenshots: shots }, null, 1));
   await browser.close(); server.close();
   process.exit(errors.length || phase !== 'end' ? 1 : 0);
 })().catch((e) => { console.error(e); process.exit(1); });
