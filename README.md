@@ -31,7 +31,7 @@ button (a tap on the screen).
   button to play again. Turn the phone upright to go back to the setup page.
 
 iPhone browsers have no WebXR, so the page draws its own side-by-side stereo
-view and head tracking (no lens-distortion correction). It also works with the
+view and head tracking, with each eye's picture fitted to a 2015 Google Cardboard's lenses. It also works with the
 phone's rotation lock on. On a desktop it shows a single view you can drag to
 look around.
 
@@ -103,6 +103,7 @@ this site. Checked in a desktop browser; not yet looked at through a viewer.
 The version is shown beside the title on the setup page and saved with every round
 (`ver`). It goes up by one with every change to the game. Newest first.
 
+- **v0.15** (27 Nov 2026): Clean-up, no change to play: fields that were written and never read are gone, and this page's notes on the camera and the lens fitting are brought up to date.
 - **v0.14** (26 Nov 2026): A choice of camera lens on the setup page: Auto, Fisheye (widest) or Regular. In Auto the widest camera is tried again after a single failure and left alone only after failing twice running (engine 1.1.0)
 - **v0.13** (26 Nov 2026): Runs on the shared VR engine (the VR-Portal repo, engine 1.0.0): the drawing surface, lens fitting, text signs, camera, hand finder, sound and saved settings are loaded from there and no longer kept in this page. Nothing should look or play differently
 - **v0.12** (26 Nov 2026): Version numbers: shown beside the title, saved with each round
@@ -129,8 +130,8 @@ identical. The page keeps what is Fruit Slicer's own: head tracking, the blade, 
 correction, the fruit, the scoring and the LiDAR readout. If the engine cannot be loaded,
 the setup page says so and Start is switched off.
 
-**Finding a small hand through the widest camera.** The game always opens the widest
-rear camera, and through it a hand at arm's length is only about a tenth of the
+**Finding a small hand through the widest camera.** With the fisheye lens (the choice on the start page; Auto prefers it) the game opens
+the widest rear camera, and through it a hand at arm's length is only about a tenth of the
 picture's width. The hand finder first shrinks the picture to a small square, where a
 hand that size cannot be made out. So the hand finder is given a part of the picture
 half as wide and half as tall, in which the hand looks twice the size. The part follows
