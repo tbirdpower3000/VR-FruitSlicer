@@ -103,7 +103,7 @@
   const store = VRE.store;
   // The version of this page. It goes up by one with every change to the game, is shown beside the title, and is saved
   // with each round, so it is always clear which version is on screen and which one a result came from.
-  const VERSION = 'v0.17';
+  const VERSION = 'v0.18';
   $('ver').textContent = VERSION;
   const say = (t) => ($('status').textContent = t || '');
 
@@ -675,6 +675,7 @@
     hud.visible = false; panel.visible = false; recentre = true;
     last = performance.now();
     requestAnimationFrame(frame);
+    if (VRE.host && VRE.host.ready) VRE.host.ready(); // running inside the home screen: tell it the game is on, so it can step back
   }
   function stop() {
     S.on = false; S.phase = 'idle';
@@ -693,7 +694,8 @@
   // remembers by itself. So: if motion is already flowing (the phone was allowed on this site this visit), the game
   // starts at once. A phone that wants to be asked again will only ask after a press, so the whole screen becomes the
   // button, for one press of the viewer's button.
-  if (Q.get('from') === 'home') {
+  if (VRE.host) { $('setup').hidden = true; start(); } // inside the home screen: its camera, sound and motion are lent, so there is nothing to wait for
+  else if (Q.get('from') === 'home') {
     const tap = document.createElement('div'), side = TOUCH && innerHeight > innerWidth;
     tap.id = 'tapStart';
     tap.style.cssText = 'position:fixed;inset:0;z-index:99;display:flex;flex-direction:' + (side ? 'column' : 'row') + ';background:#070b14;color:#e9eef5;font:600 1.4rem system-ui,sans-serif;text-align:center;cursor:pointer';
@@ -707,7 +709,9 @@
     addEventListener('deviceorientation', hear);
     setTimeout(() => { removeEventListener('deviceorientation', hear); if (flowing || !asks) begin(); }, 600);
   }
-  $('leave').onclick = stop;
+  // Inside the home screen, Exit goes back to it: the camera is the home's and is left open, and the home takes the
+  // frame away. On its own page, Exit goes back to the start page as before.
+  $('leave').onclick = () => { if (VRE.host && VRE.host.back) { S.on = false; S.stream = null; vid.srcObject = null; VRE.host.back(); } else stop(); };
   $('turnExit').onclick = stop;
   addEventListener('resize', resize);
   vid.addEventListener('loadedmetadata', resize);
