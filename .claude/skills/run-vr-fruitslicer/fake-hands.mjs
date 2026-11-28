@@ -44,7 +44,7 @@ export const HandLandmarker = {
         // a wide gap (up) and 0.2 a closed one (dropped onto the finger), which is what the game's trigger reads.
         w[9] = { x: 0, y: -0.09, z: 0 }; w[5] = { x: -0.02, y: -0.085, z: 0 }; w[6] = { x: -0.02, y: -0.125, z: 0 }; w[8] = { x: -0.02, y: -0.165, z: 0 }; w[17] = { x: 0.04, y: -0.075, z: 0 };
         w[2] = { x: -0.04, y: -0.05, z: 0 }; w[4] = { x: -0.02 - 0.086 * (f.thumb == null ? 0.6 : f.thumb), y: -0.1, z: 0 }; w[3] = { x: (w[2].x + w[4].x) / 2, y: (w[2].y + w[4].y) / 2, z: 0 };
-        return { landmarks: [lm], worldLandmarks: [w], handednesses: [[{ categoryName: 'Right' }]] };
+        return { landmarks: [lm], worldLandmarks: [w], handednesses: [[{ categoryName: f.label || 'Right' }]] }; // f.label: which hand the finder says it is
       },
     };
   },

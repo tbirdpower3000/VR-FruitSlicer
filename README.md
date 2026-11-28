@@ -103,6 +103,7 @@ this site. Checked in a desktop browser; not yet looked at through a viewer.
 The version is shown beside the title on the setup page and saved with every round
 (`ver`). It goes up by one with every change to the game. Newest first.
 
+- **v0.21** (28 Nov 2026): Leaving the game for the VR Portal home screen no longer switches the camera off. The game stops itself when its page goes out of sight, and when the home screen took the game away that rule fired and switched off the camera the home had lent it, so the home asked for the camera again.
 - **v0.20** (28 Nov 2026): The head tracking, the drawing of the two eyes and the start from the home screen now come from the shared engine (1.7.0), where this page had its own copy. About 90 lines shorter; no change to play.
 - **v0.19** (28 Nov 2026): Inside the VR Portal home screen the game now uses the home's own camera picture and hand finder (one of each for everything). Before, it showed the camera in a second video element of its own, and on the phone the hand was never seen.
 - **v0.18** (28 Nov 2026): Runs inside the VR Portal home screen. Picked there, the game opens in the same page: the home's camera, sound and motion sensors are lent to it, so nothing is asked again and the view does not drop out. Exit goes back to the home screen. (Needs engine 1.6.0. Opened on its own page, nothing changes.)

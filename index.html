@@ -104,7 +104,7 @@
   const store = VRE.store;
   // The version of this page. It goes up by one with every change to the game, is shown beside the title, and is saved
   // with each round, so it is always clear which version is on screen and which one a result came from.
-  const VERSION = 'v0.20';
+  const VERSION = 'v0.21';
   $('ver').textContent = VERSION;
   const say = (t) => ($('status').textContent = t || '');
 
@@ -178,6 +178,7 @@
   // the rear camera picture, far behind everything and fixed to the head
   // the camera's picture. Inside the home screen it is the home's own video element, already playing: one picture for
   // everything. (A second element showing the same camera inside the frame did not keep up on the phone, 28 Nov.)
+  const LENT = !!VRE.host; // running inside the home screen, on its camera (remembered now: the home's note is gone by the time this page is taken away)
   const vid = (VRE.host && VRE.host.video) || $('vid');
   const vtex = new THREE.VideoTexture(vid);
   const vplane = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ map: vtex, depthTest: false, depthWrite: false }));
@@ -613,7 +614,9 @@
     S.on = false; S.phase = 'idle';
     if (S.lidar) { appPost({ lidar: false }); S.lidar = false; }
     $('vr').hidden = true; $('turn').hidden = true; $('setup').hidden = false;
-    if (S.stream) { S.stream.getTracks().forEach((t) => t.stop()); S.stream = null; vid.srcObject = null; }
+    // a camera lent by the home screen is the home's to switch off, never this page's (when the home takes the game
+    // away this page goes out of sight, and stop() runs; it used to switch the home's camera off with it)
+    if (S.stream) { if (!LENT) { S.stream.getTracks().forEach((t) => t.stop()); vid.srcObject = null; } S.stream = null; }
     try { if (wake) wake.release(); } catch (e) {}
     wake = null;
     if ($('status').textContent === 'Starting…' || $('status').textContent === 'Loading the hand tracker…') say('');
