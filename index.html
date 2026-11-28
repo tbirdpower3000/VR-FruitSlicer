@@ -103,7 +103,7 @@
   const store = VRE.store;
   // The version of this page. It goes up by one with every change to the game, is shown beside the title, and is saved
   // with each round, so it is always clear which version is on screen and which one a result came from.
-  const VERSION = 'v0.16';
+  const VERSION = 'v0.17';
   $('ver').textContent = VERSION;
   const say = (t) => ($('status').textContent = t || '');
 
@@ -688,6 +688,25 @@
     drawRounds();
   }
   $('go').onclick = start;
+  // Opened from the VR Portal home screen: go straight into the game, with the choices made last time, and without the
+  // start page. Permissions cannot be handed from one page to the next; what a phone remembers for this site, it
+  // remembers by itself. So: if motion is already flowing (the phone was allowed on this site this visit), the game
+  // starts at once. A phone that wants to be asked again will only ask after a press, so the whole screen becomes the
+  // button, for one press of the viewer's button.
+  if (Q.get('from') === 'home') {
+    const tap = document.createElement('div'), side = TOUCH && innerHeight > innerWidth;
+    tap.id = 'tapStart';
+    tap.style.cssText = 'position:fixed;inset:0;z-index:99;display:flex;flex-direction:' + (side ? 'column' : 'row') + ';background:#070b14;color:#e9eef5;font:600 1.4rem system-ui,sans-serif;text-align:center;cursor:pointer';
+    tap.innerHTML = [0, 1].map(() => '<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:12px"><span style="width:84px;height:84px;border-radius:50%;border:6px solid #ffd88a;box-sizing:border-box"></span><b>Press the button to start</b></div>').join('');
+    document.body.appendChild(tap);
+    const begin = () => { if (!tap.parentNode) return; tap.remove(); start(); };
+    tap.onclick = begin;
+    const asks = window.DeviceOrientationEvent && typeof DeviceOrientationEvent.requestPermission === 'function';
+    let flowing = false;
+    const hear = (e) => { if (e.alpha != null) flowing = true; };
+    addEventListener('deviceorientation', hear);
+    setTimeout(() => { removeEventListener('deviceorientation', hear); if (flowing || !asks) begin(); }, 600);
+  }
   $('leave').onclick = stop;
   $('turnExit').onclick = stop;
   addEventListener('resize', resize);

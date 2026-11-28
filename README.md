@@ -103,6 +103,7 @@ this site. Checked in a desktop browser; not yet looked at through a viewer.
 The version is shown beside the title on the setup page and saved with every round
 (`ver`). It goes up by one with every change to the game. Newest first.
 
+- **v0.17** (28 Nov 2026): Opened from the VR Portal home screen, the game starts in VR at once with the choices made last time, skipping the start page. If the phone wants to be asked about motion again, the whole screen is the button: one press of the viewer's button.
 - **v0.16** (28 Nov 2026): Opened from the VR Portal home screen (`?from=home`), the start page shows a link back to it. No change to play.
 - **v0.15** (27 Nov 2026): Clean-up, no change to play: fields that were written and never read are gone, and this page's notes on the camera and the lens fitting are brought up to date.
 - **v0.14** (26 Nov 2026): A choice of camera lens on the setup page: Auto, Fisheye (widest) or Regular. In Auto the widest camera is tried again after a single failure and left alone only after failing twice running (engine 1.1.0)
