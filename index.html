@@ -93,9 +93,10 @@
   const $ = (id) => document.getElementById(id);
   // the shared VR engine (the VR-Portal repo) must have loaded; without it nothing below can run
   if (!window.VRE) { $('status').textContent = 'The VR engine could not be loaded. Check the connection and reload.'; $('go').disabled = true; return; }
+  // (the phone may still hold an older copy of the engine for a few minutes after an update)
+  if (!VRE.head || !VRE.eyes || !VRE.homeStart) { $('status').textContent = 'This phone is holding an older copy of the VR engine. Reload the page in a minute or two.'; $('go').disabled = true; return; }
   const D = Math.PI / 180;
   const Q = new URLSearchParams(location.search);
-  if (Q.get('from') === 'home') $('backHome').hidden = false; // opened from the VR Portal home screen: offer the way back
   const TOUCH = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
   const STEREO = Q.has('stereo') ? Q.get('stereo') !== '0' : TOUCH;
   const ROUND_S = +Q.get('t') || 60;
@@ -103,7 +104,7 @@
   const store = VRE.store;
   // The version of this page. It goes up by one with every change to the game, is shown beside the title, and is saved
   // with each round, so it is always clear which version is on screen and which one a result came from.
-  const VERSION = 'v0.19';
+  const VERSION = 'v0.20';
   $('ver').textContent = VERSION;
   const say = (t) => ($('status').textContent = t || '');
 
@@ -222,18 +223,12 @@
 
   // With the phone's rotation lock on, the page stays upright when the phone is turned sideways. The motion sensors still
   // show which way it was turned, so the whole view is drawn sideways to match (rot is that quarter turn, in degrees).
-  let rot = 0;
+  // The head (which way you are looking, the rotation-lock quarter turn, dragging on a desktop, the viewer's button as
+  // a tap) is the engine's, shared with the other game since engine 1.7.0; it was this page's own text before.
+  const head = VRE.head({ camera, el: renderer.domElement, onTurn: () => resize(), onTap: () => { if (S.phase === 'end' || S.phase === 'wait') startRound(); } });
   function resize() {
-    const pw = innerWidth, ph = innerHeight, pageLand = !TOUCH || pw > ph;
-    if (pageLand) rot = 0;
-    const turned = !pageLand && rot !== 0, w = turned ? ph : pw, h = turned ? pw : ph;
-    S.w = w; S.h = h; S.ready = pageLand || turned;
-    const st = $('view').style;
-    st.width = w + 'px'; st.height = h + 'px';
-    st.transform = `translate(-50%, -50%) rotate(${rot}deg)`;
-    renderer.setSize(w, h, false);
-    camera.aspect = w / h;
-    camera.updateProjectionMatrix();
+    const f = head.fit($('view'), renderer), w = f.w, h = f.h, turned = f.turned, rot = f.rot; // the view's size and turn, as the phone is held
+    S.w = w; S.h = h; S.ready = f.ready;
     const eyeAsp = (STEREO ? w / 2 : w) / h;
     // the camera picture is scaled to cover each eye's view (the overflow falls outside the view). With rotation lock on,
     // the camera's picture stays upright to the phone, so it is turned a quarter to stay upright to the room.
@@ -246,53 +241,7 @@
     $('turn').hidden = !(S.on && !S.ready);
   }
 
-  // ---------- head tracking ----------
-  const devQ = new THREE.Quaternion(), yawQ = new THREE.Quaternion();
-  const q1 = new THREE.Quaternion(-Math.SQRT1_2, 0, 0, Math.SQRT1_2), zee = new THREE.Vector3(0, 0, 1), eul = new THREE.Euler(), q0 = new THREE.Quaternion();
-  let haveMotion = false, drag = { yaw: 0, pitch: 0 }, recentre = true;
   const fwd = new THREE.Vector3(), upY = new THREE.Vector3(0, 1, 0);
-  function onOrient(e) {
-    if (e.alpha == null) return;
-    haveMotion = true;
-    eul.set(e.beta * D, e.alpha * D, -e.gamma * D, 'YXZ');
-    devQ.setFromEuler(eul).multiply(q1);
-    let o = (screen.orientation && screen.orientation.angle) != null ? screen.orientation.angle : window.orientation || 0;
-    if (TOUCH && innerHeight > innerWidth) {
-      // the page is upright: is the phone itself on its side? Its right-hand edge points up or down when it is.
-      const ry = fwd.set(1, 0, 0).applyQuaternion(devQ).y, nr = ry > 0.6 ? 90 : ry < -0.6 ? -90 : Math.abs(ry) < 0.3 ? 0 : rot;
-      if (nr !== rot) { rot = nr; resize(); }
-      o = rot;
-    }
-    devQ.multiply(q0.setFromAxisAngle(zee, -o * D));
-  }
-  function applyHead() {
-    if (haveMotion) {
-      if (recentre) {
-        fwd.set(0, 0, -1).applyQuaternion(devQ);
-        yawQ.setFromAxisAngle(upY, -Math.atan2(-fwd.x, -fwd.z));
-        recentre = false;
-      }
-      camera.quaternion.copy(yawQ).multiply(devQ);
-    } else {
-      eul.set(drag.pitch, drag.yaw, 0, 'YXZ');
-      camera.quaternion.setFromEuler(eul);
-    }
-    camera.updateMatrixWorld(true);
-  }
-  let pd = null;
-  renderer.domElement.addEventListener('pointerdown', (e) => { pd = [e.clientX, e.clientY, false]; });
-  renderer.domElement.addEventListener('pointermove', (e) => {
-    if (!pd || haveMotion) return;
-    const dx = e.clientX - pd[0], dy = e.clientY - pd[1];
-    if (Math.abs(dx) + Math.abs(dy) > 4) pd[2] = true;
-    drag.yaw -= dx * 0.004; drag.pitch = Math.max(-1.2, Math.min(1.2, drag.pitch - dy * 0.004));
-    pd[0] = e.clientX; pd[1] = e.clientY;
-  });
-  renderer.domElement.addEventListener('pointerup', () => {
-    if (pd && !pd[2] && (S.phase === 'end' || S.phase === 'wait')) startRound(); // the viewer's button is a tap on the screen
-    pd = null;
-  });
-
   // ---------- hand tracking (rear camera) ----------
   let lastVT = -1, detN = 0, detMs = 0, skip = false;
   const handRaw = { ok: false, u: 0, v: 0, vu: 0, vv: 0, t: 0, label: '' };
@@ -493,7 +442,7 @@
     S.m = { thrown: 0, sliced: 0, swipes: 0, cuts: 0, inSwipe: false, cutThisSwipe: 0, swipeT: 0, peakV: 0, vSum: 0, vN: 0, handFrames: 0, lostFrames: 0, streak: 0, best: 0, aimN: 0, aimDx: 0, aimDy: 0, aimSq: 0, a11: 0, a12: 0, a22: 0, missN: 0, missSum: 0 };
     S.score = 0; S.dwell = 0; detN = 0; detMs = 0; perf.n = 0; perf.sum = 0;
     panel.visible = false; hud.visible = true;
-    recentre = true;
+    head.recenter();
     S.phase = 'count'; S.count = performance.now(); S.tick = 99;
   }
   function endRound() {
@@ -566,7 +515,7 @@
     const gap = now - last, real = Math.min(0.3, gap / 1000 || 0.016), dt = Math.min(0.05, real);
     last = now;
     pace(now, gap);
-    applyHead();
+    head.apply();
     if (S.mode === 'hand') trackHand(now);
     updateBlade(now, dt);
     if (!S.ready) {
@@ -586,7 +535,7 @@
       drawText(hud, ['🍉 0']);
       // the fruit is thrown straight ahead of where you are looking now, as the round begins: the button may have been
       // pressed before the phone went into the viewer, facing anywhere
-      if (left <= -0.4) { note.visible = false; S.phase = 'play'; S.t0 = now; S.next = now + 300; recentre = true; }
+      if (left <= -0.4) { note.visible = false; S.phase = 'play'; S.t0 = now; S.next = now + 300; head.recenter(); }
     } else if (S.phase === 'play') play(now, dt);
     else if (S.phase === 'end') {
       fwd.set(0, 0, -1).applyQuaternion(camera.quaternion);
@@ -621,20 +570,7 @@
     } else trailPts.length = 0;
 
     const w = S.w, h = S.h; // the renderer takes these in screen pixels and applies the pixel ratio itself
-    renderer.setScissorTest(false);
-    renderer.clear();
-    if (STEREO && lens.on) lensRender(w, h);
-    else if (STEREO) {
-      stereo.update(camera);
-      renderer.setScissorTest(true);
-      renderer.setScissor(0, 0, w / 2, h); renderer.setViewport(0, 0, w / 2, h);
-      renderer.render(scene, stereo.cameraL);
-      renderer.setScissor(w / 2, 0, w / 2, h); renderer.setViewport(w / 2, 0, w / 2, h);
-      renderer.render(scene, stereo.cameraR);
-    } else {
-      renderer.setViewport(0, 0, w, h);
-      renderer.render(scene, camera);
-    }
+    VRE.eyes({ renderer, scene, camera, stereo, lens, lensRender, both: STEREO }, w, h);
   }
 
   // ---------- start / stop ----------
@@ -648,13 +584,7 @@
     say('Starting…');
     sound.wake();
     // motion: iPhone asks once, and only from a button press
-    try {
-      if (window.DeviceOrientationEvent && typeof DeviceOrientationEvent.requestPermission === 'function') {
-        const r = await DeviceOrientationEvent.requestPermission();
-        if (r !== 'granted') say('Motion was not allowed, so drag the picture to look around.');
-      }
-    } catch (e) {}
-    window.addEventListener('deviceorientation', onOrient);
+    if ((await head.ask()) === 'refused') say('Motion was not allowed, so drag the picture to look around.');
     S.mode = want;
     const needCam = want === 'hand' || S.showRoom;
     if (needCam && !S.stream) {
@@ -674,7 +604,7 @@
     resize();
     try { if (navigator.wakeLock) wake = await navigator.wakeLock.request('screen'); } catch (e) {}
     S.phase = 'wait';
-    hud.visible = false; panel.visible = false; recentre = true;
+    hud.visible = false; panel.visible = false; head.recenter();
     last = performance.now();
     requestAnimationFrame(frame);
     if (VRE.host && VRE.host.ready) VRE.host.ready(); // running inside the home screen: tell it the game is on, so it can step back
@@ -691,36 +621,17 @@
     drawRounds();
   }
   $('go').onclick = start;
-  // Opened from the VR Portal home screen: go straight into the game, with the choices made last time, and without the
-  // start page. Permissions cannot be handed from one page to the next; what a phone remembers for this site, it
-  // remembers by itself. So: if motion is already flowing (the phone was allowed on this site this visit), the game
-  // starts at once. A phone that wants to be asked again will only ask after a press, so the whole screen becomes the
-  // button, for one press of the viewer's button.
-  if (VRE.host) { $('setup').hidden = true; start(); } // inside the home screen: its camera, sound and motion are lent, so there is nothing to wait for
-  else if (Q.get('from') === 'home') {
-    const tap = document.createElement('div'), side = TOUCH && innerHeight > innerWidth;
-    tap.id = 'tapStart';
-    tap.style.cssText = 'position:fixed;inset:0;z-index:99;display:flex;flex-direction:' + (side ? 'column' : 'row') + ';background:#070b14;color:#e9eef5;font:600 1.4rem system-ui,sans-serif;text-align:center;cursor:pointer';
-    tap.innerHTML = [0, 1].map(() => '<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:12px"><span style="width:84px;height:84px;border-radius:50%;border:6px solid #ffd88a;box-sizing:border-box"></span><b>Press the button to start</b></div>').join('');
-    document.body.appendChild(tap);
-    const begin = () => { if (!tap.parentNode) return; tap.remove(); start(); };
-    tap.onclick = begin;
-    const asks = window.DeviceOrientationEvent && typeof DeviceOrientationEvent.requestPermission === 'function';
-    let flowing = false;
-    const hear = (e) => { if (e.alpha != null) flowing = true; };
-    addEventListener('deviceorientation', hear);
-    setTimeout(() => { removeEventListener('deviceorientation', hear); if (flowing || !asks) begin(); }, 600);
-  }
-  // Inside the home screen, Exit goes back to it: the camera is the home's and is left open, and the home takes the
-  // frame away. On its own page, Exit goes back to the start page as before.
-  $('leave').onclick = () => { if (VRE.host && VRE.host.back) { S.on = false; S.stream = null; VRE.host.back(); } else stop(); };
+  // Opened from the VR Portal home screen (inside it, or on this page with ?from=home): straight into the game with
+  // the choices made last time. The engine does it, the same for every game (VRE.homeStart).
+  VRE.homeStart(start);
+  $('leave').onclick = VRE.exitTo(stop, S); // inside the home screen, Exit goes back to it; here, to the start page
   $('turnExit').onclick = stop;
   addEventListener('resize', resize);
   vid.addEventListener('loadedmetadata', resize);
   document.addEventListener('visibilitychange', () => { if (document.hidden && S.on) stop(); });
 
   // for checks: read the state, point the head, or place the hand in the camera picture
-  window.__fruitVR = { VERSION, roi, handSys, S, lens, blade, lidar, dist, look(yawDeg, pitchDeg) { drag.yaw = yawDeg * D; drag.pitch = pitchDeg * D; }, hand(u, v) { if (u == null) handRaw.ok = false; else { handRaw.ok = true; handRaw.u = u; handRaw.v = v; handRaw.vu = handRaw.vv = 0; } }, perf, snd, handNow(u, v, vu, vv, agoMs) { Object.assign(handRaw, { u, v, vu, vv, t: performance.now() - agoMs }); return handNow(performance.now(), [0, 0]); }, setMode(m) { S.mode = m; }, pic, handDir(u, v) { const d = videoDir(u, v, new THREE.Vector3()); return [d.x, d.y, d.z]; } };
+  window.__fruitVR = { VERSION, roi, handSys, S, lens, blade, lidar, dist, look(yawDeg, pitchDeg) { head.test.look(yawDeg, pitchDeg); }, hand(u, v) { if (u == null) handRaw.ok = false; else { handRaw.ok = true; handRaw.u = u; handRaw.v = v; handRaw.vu = handRaw.vv = 0; } }, perf, snd, handNow(u, v, vu, vv, agoMs) { Object.assign(handRaw, { u, v, vu, vv, t: performance.now() - agoMs }); return handNow(performance.now(), [0, 0]); }, setMode(m) { S.mode = m; }, pic, handDir(u, v) { const d = videoDir(u, v, new THREE.Vector3()); return [d.x, d.y, d.z]; } };
 })();
 </script>
 </body>

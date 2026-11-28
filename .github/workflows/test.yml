@@ -1,0 +1,31 @@
+name: Game checks
+# Plays the game through in a headless browser on every push: by gaze, and with a stand-in hand.
+# The engine is the one on the site (what players get), fetched fresh.
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  play:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install the browser
+        run: |
+          npm install --no-save playwright@1.48.0
+          npx playwright install --with-deps chromium
+      - name: Play by gaze
+        run: node .claude/skills/run-vr-fruitslicer/driver.cjs --mode gaze --out test-output/gaze
+      - name: Play with a stand-in hand
+        run: node .claude/skills/run-vr-fruitslicer/driver.cjs --mode hand  --out test-output/hand
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: game-test-output
+          path: test-output/
