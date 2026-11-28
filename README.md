@@ -103,6 +103,7 @@ this site. Checked in a desktop browser; not yet looked at through a viewer.
 The version is shown beside the title on the setup page and saved with every round
 (`ver`). It goes up by one with every change to the game. Newest first.
 
+- **v0.16** (28 Nov 2026): Opened from the VR Portal home screen (`?from=home`), the start page shows a link back to it. No change to play.
 - **v0.15** (27 Nov 2026): Clean-up, no change to play: fields that were written and never read are gone, and this page's notes on the camera and the lens fitting are brought up to date.
 - **v0.14** (26 Nov 2026): A choice of camera lens on the setup page: Auto, Fisheye (widest) or Regular. In Auto the widest camera is tried again after a single failure and left alone only after failing twice running (engine 1.1.0)
 - **v0.13** (26 Nov 2026): Runs on the shared VR engine (the VR-Portal repo, engine 1.0.0): the drawing surface, lens fitting, text signs, camera, hand finder, sound and saved settings are loaded from there and no longer kept in this page. Nothing should look or play differently

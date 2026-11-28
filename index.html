@@ -40,6 +40,7 @@
 <body>
 <main id="setup">
   <h1>🍉 Fruit Slicer VR <span id="ver" class="muted" style="font-weight:400;font-size:0.9rem"></span></h1>
+  <p id="backHome" hidden><a href="https://tbirdpower3000.github.io/VR-Portal/home.html">← Back to the VR Portal home</a></p>
   <p class="muted">For a phone in a Google Cardboard viewer. Fruit is thrown up in front of you; cut it before it falls.</p>
 
   <div class="card">
@@ -94,6 +95,7 @@
   if (!window.VRE) { $('status').textContent = 'The VR engine could not be loaded. Check the connection and reload.'; $('go').disabled = true; return; }
   const D = Math.PI / 180;
   const Q = new URLSearchParams(location.search);
+  if (Q.get('from') === 'home') $('backHome').hidden = false; // opened from the VR Portal home screen: offer the way back
   const TOUCH = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
   const STEREO = Q.has('stereo') ? Q.get('stereo') !== '0' : TOUCH;
   const ROUND_S = +Q.get('t') || 60;
@@ -101,7 +103,7 @@
   const store = VRE.store;
   // The version of this page. It goes up by one with every change to the game, is shown beside the title, and is saved
   // with each round, so it is always clear which version is on screen and which one a result came from.
-  const VERSION = 'v0.15';
+  const VERSION = 'v0.16';
   $('ver').textContent = VERSION;
   const say = (t) => ($('status').textContent = t || '');
 
