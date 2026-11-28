@@ -103,6 +103,7 @@ this site. Checked in a desktop browser; not yet looked at through a viewer.
 The version is shown beside the title on the setup page and saved with every round
 (`ver`). It goes up by one with every change to the game. Newest first.
 
+- **v0.19** (28 Nov 2026): Inside the VR Portal home screen the game now uses the home's own camera picture and hand finder (one of each for everything). Before, it showed the camera in a second video element of its own, and on the phone the hand was never seen.
 - **v0.18** (28 Nov 2026): Runs inside the VR Portal home screen. Picked there, the game opens in the same page: the home's camera, sound and motion sensors are lent to it, so nothing is asked again and the view does not drop out. Exit goes back to the home screen. (Needs engine 1.6.0. Opened on its own page, nothing changes.)
 - **v0.17** (28 Nov 2026): Opened from the VR Portal home screen, the game starts in VR at once with the choices made last time, skipping the start page. If the phone wants to be asked about motion again, the whole screen is the button: one press of the viewer's button.
 - **v0.16** (28 Nov 2026): Opened from the VR Portal home screen (`?from=home`), the start page shows a link back to it. No change to play.

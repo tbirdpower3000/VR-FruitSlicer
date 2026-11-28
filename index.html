@@ -103,7 +103,7 @@
   const store = VRE.store;
   // The version of this page. It goes up by one with every change to the game, is shown beside the title, and is saved
   // with each round, so it is always clear which version is on screen and which one a result came from.
-  const VERSION = 'v0.18';
+  const VERSION = 'v0.19';
   $('ver').textContent = VERSION;
   const say = (t) => ($('status').textContent = t || '');
 
@@ -175,7 +175,9 @@
   room.add(grid);
 
   // the rear camera picture, far behind everything and fixed to the head
-  const vid = $('vid');
+  // the camera's picture. Inside the home screen it is the home's own video element, already playing: one picture for
+  // everything. (A second element showing the same camera inside the frame did not keep up on the phone, 28 Nov.)
+  const vid = (VRE.host && VRE.host.video) || $('vid');
   const vtex = new THREE.VideoTexture(vid);
   const vplane = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ map: vtex, depthTest: false, depthWrite: false }));
   vplane.renderOrder = -10;
@@ -711,7 +713,7 @@
   }
   // Inside the home screen, Exit goes back to it: the camera is the home's and is left open, and the home takes the
   // frame away. On its own page, Exit goes back to the start page as before.
-  $('leave').onclick = () => { if (VRE.host && VRE.host.back) { S.on = false; S.stream = null; vid.srcObject = null; VRE.host.back(); } else stop(); };
+  $('leave').onclick = () => { if (VRE.host && VRE.host.back) { S.on = false; S.stream = null; VRE.host.back(); } else stop(); };
   $('turnExit').onclick = stop;
   addEventListener('resize', resize);
   vid.addEventListener('loadedmetadata', resize);
